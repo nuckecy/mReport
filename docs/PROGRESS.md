@@ -9,7 +9,7 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, 1, and 2 complete. Day 3 (login UI + session wiring) is next.**
+**Slice 1 — Days 0, 0.5, 1, 2, and 3 complete. Day 4 (upload + parse flow) is next.**
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -126,11 +126,43 @@ All quality checks green: format, typecheck, lint, unit tests, build.
   middleware first-class; just declare `runtime: "nodejs"` in middleware config)
 - ✅ Smoke-tested: dev server boots in <300ms; bare/tenant/unknown hostnames
   all return 200; middleware doesn't crash on DB lookups
-- ⬜ Wire login UI: server action → Supabase Auth → resolve mReport role → redirect
-  (Day 3)
-- ⬜ Wire `/auth/callback` for magic-code redirect-back (Day 3)
+- ✅ Wire login UI: server action → Supabase Auth → resolve mReport role → redirect
+  (Day 3, completed)
+- ✅ Wire `/auth/callback` for magic-link redirect-back (Day 3, completed)
 
-### Day 3 — Upload + parse flow (auth-gated)
+### Day 3 — Auth UI (login + callback + no-access) — ✅ DONE
+
+Auth model decision: **MAGIC LINK ONLY** (matches event-calendar). The user submits
+their email, gets a one-tap link, clicks it, lands on `/auth/callback`. No 6-digit
+code-entry UI. `shouldCreateUser: false` so /login is not a sign-up surface.
+
+Parallel-agent run produced the design and reference research; integration was
+sequential to avoid file conflicts.
+
+- ✅ `src/components/ui/input.tsx`, `label.tsx`, `card.tsx` — token-driven primitives
+- ✅ `src/lib/auth/redirect-safety.ts` — `safeNextPath` open-redirect guard
+- ✅ `src/lib/auth/actions.ts` — `signOutAction`
+- ✅ `src/app/login/actions.ts` — `signInWithMagicLinkAction` with Zod validation;
+  builds tenant-scoped callback URL from request headers; 429 surfacing; generic
+  success on every other path to avoid email-enumeration
+- ✅ `src/app/login/LoginForm.tsx` — client component using React 19 `useActionState`,
+  swaps to "Check your email" confirmation in-place; focus management; `role="alert"`
+  + `aria-invalid` accessibility
+- ✅ `src/app/login/page.tsx` — server component; reads tenant context for the
+  workspace badge; redirects already-signed-in users to `next`; renders inline
+  `?e=` callback error if present
+- ✅ `src/app/auth/callback/route.ts` — `exchangeCodeForSession`; redirects to
+  `/login?e=expired|invalid` on failure; uses request origin (multi-tenant safe)
+- ✅ `src/app/no-access/page.tsx` — friendly-not-punishing; avatar block + status
+  pill; `mailto:` "Contact admin" + `signOutAction` form
+- ✅ `tests/redirect-safety.test.ts` — 7 unit tests covering open-redirect attack
+  patterns (protocol-relative, backslash, URL-encoded, malformed)
+- ✅ `tests/e2e/login.spec.ts` — 3 Playwright tests: form renders, invalid-email
+  inline error, callback-error indicator
+- ✅ All quality checks green: format, typecheck, lint, build, 12 unit tests,
+  4 Playwright tests
+
+### Day 4 — Upload + parse flow (auth-gated)
 
 - ⬜ Build `/upload` page (drop zone, parse, validation summary)
 - ⬜ Port the parser from `_prototype/index.html` to `src/lib/parser/` —
@@ -140,7 +172,7 @@ All quality checks green: format, typecheck, lint, unit tests, build.
 - ⬜ Parish-mismatch check (parish-from-template must match user's authorized
   parish via `mreport_user_scopes`)
 
-### Day 4 — Submit flow
+### Day 5 — Submit flow
 
 - ⬜ Server action: validate via Zod, write `mreport_reports` + `mreport_report_lines`,
   upload .xlsx to Supabase Storage, write `mreport_audit_log` entry
@@ -150,19 +182,19 @@ All quality checks green: format, typecheck, lint, unit tests, build.
 - ⬜ Auto-fix flow (in-memory cell patch + re-validate, no re-upload) — Statistics
   fields only
 
-### Day 5 — Admin: members CRUD
+### Day 6 — Admin: members CRUD
 
 - ⬜ `/admin/members` page — list, add, edit, deactivate
 - ⬜ Role + parish/region assignment (writes to `core_tenant_user_roles` + `mreport_user_scopes`)
 - ⬜ Scoped by viewer's role (RLS-enforced, not just UI)
 
-### Day 6 — Admin: reports list + detail
+### Day 7 — Admin: reports list + detail
 
 - ⬜ `/admin/reports` page — list with filter (parish, month, status)
 - ⬜ Detail view with full parsed JSON + downloadable original .xlsx
 - ⬜ Audit trail visible at the bottom of detail view
 
-### Day 7 — Polish + verification
+### Day 8 — Polish + verification
 
 - ⬜ Re-run security checklist against Slice 1 build
 - ⬜ Generate `SECURITY_AUDIT_REPORT.md` (per the security-handoff doc)
