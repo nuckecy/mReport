@@ -9,7 +9,7 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, 1, 2, 3, 4, 5, and 6 complete. Day 7 (admin: reports list + detail) is next.**
+**Slice 1 — Days 0, 0.5, 1, 2, 3, 4, 5, 6, and 7 complete. Day 8 (polish + verification) is next.**
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -388,11 +388,75 @@ Known follow-ups (Day 7+):
   any tenant approaches that limit)
 - Replace the inline modal dialogs with a proper Dialog primitive
 
-### Day 7 — Admin: reports list + detail
+### Day 7 — Admin: reports list + detail — ✅ DONE
 
-- ⬜ `/admin/reports` page — list with filter (parish, month, status)
-- ⬜ Detail view with full parsed JSON + downloadable original .xlsx
-- ⬜ Audit trail visible at the bottom of detail view
+Filterable reports list at `/admin/reports`, per-report detail at
+`/admin/reports/[id]`, signed-URL download of the original .xlsx (admin
+audited), and a Reports tab added to the admin nav.
+
+Queries + filters (`src/lib/reports/`):
+- ✅ `filters.ts` — pure `parseReportFilters` that drops malformed
+  parish UUIDs, malformed YYYY-MM month strings, and unknown statuses.
+  `monthSlugToDate` converts "2025-10" → "2025-10-01" for the date column.
+  Lives separate from `queries.ts` so unit tests don't pull in Drizzle.
+- ✅ `queries.ts` — `listReports` (joins parishes + regions + submitter
+  user, descending by submitted_at), `getReportById` (incl. raw_json +
+  superseded_by + source_file), `listReportLines` (per-date rows for
+  the detail table), `listAuditForReport` (timeline scoped to this
+  target), `listParishesForTenant` (filter dropdown), and
+  `listMonthsWithReports` (months that actually have data, for the
+  month filter)
+
+Signed-URL action (`src/lib/reports/actions.ts`):
+- ✅ `createReportFileSignedUrlAction` re-derives the storage key from
+  the report row + raw_json (never trusts the client). Wraps Supabase
+  Storage's `createSignedUrl` with a 60s TTL and the `download`
+  attachment filename. Audits `report.file_downloaded` to
+  mreport_audit_log even on success — admin downloads always leave a
+  trail. RLS already gates the storage objects, but the action also
+  re-checks tenant ownership via the DB lookup (signed URLs would
+  otherwise bypass RLS).
+
+UI (`src/app/admin/`):
+- ✅ `layout.tsx` updated — Reports tab added (first), Members tab
+  second. Reports icon = FileSpreadsheet.
+- ✅ `admin/page.tsx` redirects bare /admin → /admin/reports.
+- ✅ `admin/reports/page.tsx` — server component; renders ReportsFilters
+  + table with month / parish / region / income / submitter / status
+  / submitted-at columns. Status badge uses good/warn/subtle tones.
+  Each row links to the detail page via the month cell.
+- ✅ `admin/reports/ReportsFilters.tsx` — client component; URL-state
+  driven (parish/month/status). `useRouter().push` re-renders the
+  server component with fresh data. Clear-filters button when any
+  filter is active.
+- ✅ `admin/reports/[id]/page.tsx` — detail view: back link, header
+  (parish · month, region + submitter + timestamp), status badge,
+  DownloadFileButton, optional amendment-note card, 6-stat totals
+  grid, per-date lines table (date / day / attendance / money +
+  total), audit-trail list, collapsible raw-JSON `<details>`.
+- ✅ `admin/reports/DownloadFileButton.tsx` — client; calls the
+  signed-URL action, then triggers the download via a transient `<a>`
+  element. Surfaces error inline.
+
+Tests:
+- ✅ `tests/reports.test.ts` — 8 unit tests for `parseReportFilters`:
+  empty input → all nulls; valid + malformed parish UUIDs; the 12
+  valid YYYY-MM forms + 5 malformed ones (rejecting "2025-13",
+  "2025-00", non-zero-padded months, ISO date strings, two-digit
+  years); only the 3 enum status values are accepted; all three
+  filters compose.
+
+All quality checks green: format, typecheck, lint, build, 110 unit
+tests, 4 Playwright tests.
+
+Known follow-ups (Day 8+):
+- Pagination on the reports list (Day 7 caps at 50 most-recent —
+  works for now; Day 7.5/8 will add `?cursor=` once tenants hit it)
+- Scoped admin filtering (regional_admin sees only their region's
+  reports; parish_admin sees only their parish) — same Day 6.5/7
+  follow-up that we deferred for members
+- Replace the inline modal dialog scaffolding with a proper Dialog
+  primitive — applies to both Reports and Members surfaces
 
 ### Day 8 — Polish + verification
 
@@ -463,3 +527,4 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** Day 2: Drizzle + tenant + auth + middleware ported from event-calendar (mReport role vocabulary, defaults to appSlug="mreport"); dev server smoke-tested with tenant subdomains; HMR-safe DB client
 - **2026-05-14** Day 5: Storage bucket `mreport-reports` (path `<tenant>/<parish>/<YYYY-MM>.xlsx`), RLS via scalar SRF wrapper (`mreport_user_is_tenant_member`), full Drizzle-tx submit pipeline with amendment handling and audit log
 - **2026-05-14** Day 6: members admin gated to super_admin/platform_admin (regional/parish-admin scoping deferred to Day 6.5/7); Zod schemas in their own module so unit tests don't pull in Drizzle; Supabase admin client (service-role) wrapped + cached server-side
+- **2026-05-14** Day 7: filterable reports list + detail with audit trail; signed-URL download (60s TTL) re-derives the storage key from the DB row and audits `report.file_downloaded` on success; URL-state-driven filters via `useRouter().push`; filters helper extracted to its own module for test isolation
