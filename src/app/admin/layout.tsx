@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileSpreadsheet, LogOut, Users } from "lucide-react";
+import { FileSpreadsheet, Globe, LogOut, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/lib/auth/actions";
 import { requireAdmin } from "@/lib/auth/admin";
@@ -50,6 +50,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         >
           <FileSpreadsheet className="mr-1.5 inline size-4" aria-hidden="true" />
           Reports
+        </Link>
+        <Link
+          href="/admin/region"
+          className="text-text-muted hover:text-text border-b-2 border-transparent px-3 pb-2 text-sm font-medium"
+        >
+          <Globe className="mr-1.5 inline size-4" aria-hidden="true" />
+          Region rollup
         </Link>
         <Link
           href="/admin/members"
