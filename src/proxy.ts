@@ -1,9 +1,14 @@
-// Tenant resolution + Supabase session refresh middleware.
+// Tenant resolution + Supabase session refresh (Next 16 Proxy).
 //
-// Ported from event-calendar/middleware.ts. Functionally identical — same
-// platform, same hostname strategy, same security guarantees. Anything
-// different here would create a confusing inconsistency for tenants who
-// use both apps.
+// This file used to be `middleware.ts`. Next 16 renamed the file convention
+// to `proxy.ts` and made the Node.js runtime the default. Setting
+// `runtime: "nodejs"` in the config throws an error in 16+, which silently
+// disables the file — that was the root cause of `demo.localhost:3000`
+// never getting its tenant headers injected before we renamed.
+//
+// Ported from event-calendar/middleware.ts (back when it was still called
+// that). Functionally identical — same platform, same hostname strategy,
+// same security guarantees.
 //
 // Runs on every non-static request and does two things:
 //
@@ -20,9 +25,8 @@
 //     tokens silently expire and users get logged out mid-flow.
 //
 // SECURITY:
-// - Runs in Node.js runtime so we can use Drizzle + postgres-js for
-//   tenant lookups and @supabase/ssr for session refresh. Edge runtime
-//   can't open TCP sockets to Postgres.
+// - Runs in the Node.js runtime by default (Next 16) so we can use Drizzle
+//   + postgres-js for tenant lookups and @supabase/ssr for session refresh.
 // - Header sanitisation: strips any incoming `x-tenant-*` and
 //   `x-domain-*` headers before processing, so a crafted request can
 //   never spoof tenant identity.
@@ -114,7 +118,7 @@ async function refreshSupabaseSession(request: NextRequest, response: NextRespon
   await supabase.auth.getUser();
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const hostname = (request.headers.get("host") ?? "").toLowerCase();
 
   // Build the request headers we'll forward to downstream handlers.
@@ -210,7 +214,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // Run on everything except Next.js static assets and the favicon.
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-  // Use Node.js runtime so we can talk to Postgres directly.
-  // Requires `experimental.nodeMiddleware: true` in next.config.ts.
-  runtime: "nodejs",
+  // NOTE: In Next 16, the `runtime` option is NOT allowed in proxy config
+  // (it throws and silently disables the proxy). Node is the default; no
+  // declaration needed.
 };
