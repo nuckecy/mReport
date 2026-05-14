@@ -274,12 +274,13 @@ export function UploadDropzone({ authorizedParish, userRole }: UploadDropzonePro
         onShowFull={() => setState({ ...state, showFullReport: true })}
         onDownloadJSON={() => downloadReportJSON(state.report)}
         onDownloadXLSX={() => downloadReportXLSX(state.report)}
+        onReplace={(file) => void processFile(file)}
       />
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <label
         htmlFor="file-input"
         onDragEnter={() => setDragActive(true)}
@@ -289,8 +290,8 @@ export function UploadDropzone({ authorizedParish, userRole }: UploadDropzonePro
         }}
         onDragLeave={() => setDragActive(false)}
         onDrop={onDrop}
-        className={`border-border bg-panel hover:border-border-strong focus-within:border-accent flex min-h-[240px] cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-2 border-dashed px-6 py-12 text-center transition-colors ${
-          dragActive ? "border-accent bg-panel-2" : ""
+        className={`bg-panel/40 hover:bg-panel hover:border-border-strong focus-within:border-accent group relative flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-[var(--radius-lg)] border border-dashed px-6 py-8 text-center transition-all ${
+          dragActive ? "border-accent bg-accent/5 scale-[1.005]" : "border-border/70"
         }`}
       >
         <input
@@ -302,18 +303,30 @@ export function UploadDropzone({ authorizedParish, userRole }: UploadDropzonePro
           onChange={onChange}
           disabled={state.kind === "parsing"}
         />
-        <div className="bg-panel-2 grid size-12 place-items-center rounded-full">
+        <div
+          className={`grid size-9 place-items-center rounded-full transition-colors ${
+            dragActive
+              ? "bg-accent/15 text-accent"
+              : "bg-panel-2 text-text-muted group-hover:text-text"
+          }`}
+        >
           {state.kind === "parsing" ? (
-            <Loader2 className="text-text-muted size-5 animate-pulse" aria-hidden />
+            <Loader2 className="size-4 animate-pulse" aria-hidden />
           ) : (
-            <Upload className="text-text-muted size-5" aria-hidden />
+            <Upload className="size-4" aria-hidden />
           )}
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5">
           <p className="text-text text-sm font-medium">
-            {state.kind === "parsing" ? "Parsing…" : "Drop a parish .xlsx here"}
+            {state.kind === "parsing"
+              ? "Parsing…"
+              : dragActive
+                ? "Drop to upload"
+                : "Drop a parish .xlsx"}
           </p>
-          <p className="text-text-muted text-xs">or click to choose a file</p>
+          <p className="text-text-subtle text-xs">
+            {state.kind === "parsing" ? "Reading the workbook" : "or click to choose a file"}
+          </p>
         </div>
       </label>
 
@@ -334,6 +347,7 @@ function ParsedView({
   onShowFull,
   onDownloadJSON,
   onDownloadXLSX,
+  onReplace,
 }: {
   state: Extract<State, { kind: "parsed" }>;
   onReset: () => void;
@@ -342,26 +356,73 @@ function ParsedView({
   onShowFull: () => void;
   onDownloadJSON: () => void;
   onDownloadXLSX: () => void;
+  onReplace: (file: File) => void;
 }) {
   const { report, grade, failures, mismatch, sessionFixes, submission } = state;
   const templateInvalid = !report.templateValidity.valid;
   const allClean = grade.notValidated.length === 0 && grade.missing.length === 0;
 
+  // Page-wide drag-and-drop: when a file is dragged anywhere on the
+  // parsed view, show the DropOverlay and accept the drop to replace
+  // the current file. dragCount tracks nested enter/leave so the
+  // overlay doesn't flicker as the cursor moves over child elements.
+  const [dragOverlay, setDragOverlay] = useState(false);
+  const dragCountRef = useRef(0);
+
+  const onDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCountRef.current += 1;
+    setDragOverlay(true);
+  }, []);
+  const onDragLeave = useCallback(() => {
+    dragCountRef.current = Math.max(0, dragCountRef.current - 1);
+    if (dragCountRef.current === 0) setDragOverlay(false);
+  }, []);
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+  }, []);
+  const onDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      dragCountRef.current = 0;
+      setDragOverlay(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) onReplace(file);
+    },
+    [onReplace],
+  );
+
+  // Wrapper used by every fast-path branch — keeps the drag handlers
+  // and overlay in one place.
+  const wrap = (children: React.ReactNode) => (
+    <div
+      className="flex flex-col gap-3"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {children}
+      <DropOverlay active={dragOverlay} />
+    </div>
+  );
+
   // Outdated-template fast path — show ONLY the banner.
   if (templateInvalid) {
-    return (
-      <div className="flex flex-col gap-4">
-        <FileHeader filename={state.filename} report={report} onReset={onReset} />
+    return wrap(
+      <>
+        <FileStrip filename={state.filename} report={report} onReset={onReset} />
         <TemplateBanner validity={report.templateValidity} onReset={onReset} />
-      </div>
+      </>,
     );
   }
 
   // All-clean fast path — compact summary with submit CTA.
   if (allClean && !state.showFullReport) {
-    return (
-      <div className="flex flex-col gap-4">
-        <FileHeader filename={state.filename} report={report} onReset={onReset} />
+    return wrap(
+      <>
+        <FileStrip filename={state.filename} report={report} onReset={onReset} />
         <FixesLog fixes={sessionFixes} />
         {mismatch ? <MismatchPanel message={mismatch} /> : null}
         <CompactSummary
@@ -374,14 +435,14 @@ function ParsedView({
         <SubmissionFeedback submission={submission} onAmend={(note) => void onSubmit(note)} />
         <Downloads onDownloadJSON={onDownloadJSON} onDownloadXLSX={onDownloadXLSX} />
         <ParsedDetails report={report} />
-      </div>
+      </>,
     );
   }
 
   // Full failure list.
-  return (
-    <div className="flex flex-col gap-4">
-      <FileHeader filename={state.filename} report={report} onReset={onReset} />
+  return wrap(
+    <>
+      <FileStrip filename={state.filename} report={report} onReset={onReset} />
       <FixesLog fixes={sessionFixes} />
       {mismatch ? <MismatchPanel message={mismatch} /> : null}
 
@@ -441,13 +502,18 @@ function ParsedView({
 
       <Downloads onDownloadJSON={onDownloadJSON} onDownloadXLSX={onDownloadXLSX} />
       <ParsedDetails report={report} />
-    </div>
+    </>,
   );
 }
 
 // ── Sub-components ───────────────────────────────────────────────────
 
-function FileHeader({
+/**
+ * Slim file-state strip shown above the parsed report. ~52px tall.
+ * Replaces the old card-style FileHeader so the report content gets
+ * more visual weight than the file metadata.
+ */
+function FileStrip({
   filename,
   report,
   onReset,
@@ -456,27 +522,55 @@ function FileHeader({
   report: Report;
   onReset: () => void;
 }) {
+  // `key` on the parent re-mounts the element on every new file load,
+  // which restarts the fade-slide-in animation defined in globals.css.
   return (
-    <Card>
-      <CardContent className="flex items-start gap-4 p-5">
-        <div className="bg-panel-2 grid size-10 place-items-center rounded-[var(--radius-md)]">
-          <FileSpreadsheet className="text-text-muted size-5" aria-hidden />
+    <div
+      key={filename}
+      className="bg-panel border-border animate-fade-slide-in flex items-center gap-3 rounded-[var(--radius-md)] border px-3 py-2"
+    >
+      <div className="bg-panel-2 grid size-8 shrink-0 place-items-center rounded-[var(--radius-sm)]">
+        <FileSpreadsheet className="text-text-muted size-4" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-text-subtle truncate font-mono text-xs">{filename}</p>
+        <p className="text-text mt-0.5 truncate text-sm font-medium">
+          <span className="text-text">{report.source.parish ?? "Unknown parish"}</span>
+          <span className="text-text-subtle mx-1.5">·</span>
+          <span className="text-text-muted">{report.source.reportMonth}</span>
+        </p>
+      </div>
+      <Button variant="ghost" size="sm" onClick={onReset}>
+        <RotateCcw className="size-3.5" aria-hidden />
+        Replace file
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Translucent overlay shown when the user drags a file over the page
+ * while a report is already loaded. Lets them drop anywhere to replace
+ * the current file. The parent attaches the drag listeners to its
+ * outermost div so this overlay just renders the visual.
+ */
+function DropOverlay({ active }: { active: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none fixed inset-0 z-50 grid place-items-center transition-opacity duration-150 ${
+        active ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <div className="bg-bg/80 absolute inset-0 backdrop-blur-sm" />
+      <div className="border-accent bg-panel relative flex flex-col items-center gap-3 rounded-[var(--radius-lg)] border-2 border-dashed px-12 py-10">
+        <div className="bg-accent/15 text-accent grid size-12 place-items-center rounded-full">
+          <Upload className="size-5" aria-hidden />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-text-subtle truncate font-mono text-xs">{filename}</p>
-          <p className="text-text mt-0.5 text-sm font-medium">
-            {report.source.parish ?? "Unknown parish"} · {report.source.reportMonth}
-          </p>
-          <p className="text-text-muted mt-0.5 text-xs">
-            {report.source.pastor ?? "Unknown pastor"}
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onReset}>
-          <RotateCcw className="size-4" aria-hidden />
-          Upload another
-        </Button>
-      </CardContent>
-    </Card>
+        <p className="text-text text-base font-semibold">Drop to replace the file</p>
+        <p className="text-text-muted text-xs">The current report will be discarded</p>
+      </div>
+    </div>
   );
 }
 
