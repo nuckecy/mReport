@@ -9,20 +9,18 @@
 
 ## Where we are right now
 
-**Slice 1 — Day 0 complete. Day 1 blocked pending platform integration setup.**
+**Slice 1 — Days 0, 0.5, and 1 complete. Day 2 (auth + middleware) is next.**
 
-The Next.js project is scaffolded with design tokens, primitives, security headers,
-the lib skeleton, Vitest + Playwright, the initial Supabase migration (which now
-needs to be reworked for multi-tenant), and CI. Initial commit pushed to GitHub.
+mReport now has live tables and seed data in the platform's Supabase project:
+- 7 `mreport_*` tables created with RLS enabled
+- 8 RLS policies applied (mirroring event-calendar's pattern, using platform helpers)
+- `mreport` registered in `core_apps`
+- `Demo Church` tenant has mReport enabled
+- `nuckecy@gmail.com` exists in `auth.users` + `core_users` (with `is_platform_admin=true`)
+- Tenant membership + `super_admin` role assigned for mReport
+- 1 region + 3 parishes seeded (Mount Zion Berlin, New Song Berlin, RCCG Fountain of Life Neumünster)
 
-**Then context shifted:** mReport is part of a multi-tenant platform with existing
-`core_*` tables and an existing reference app (`event-calendar`). We discovered this
-mid-flight. The Day 0 schema migration uses the wrong prefix (`q7m2_`) and the wrong
-auth model. It needs a rework before Day 1 can proceed.
-
-**Auth flavor confirmed (post-investigation): Hybrid.** Supabase Auth is the backend
-for credentials/sessions, but tenant resolution and role checks live in a custom
-platform layer that mReport must integrate with — not invent.
+All quality checks green: format, typecheck, lint, unit tests, build.
 
 ---
 
@@ -51,46 +49,40 @@ platform layer that mReport must integrate with — not invent.
 - ✅ README, .env.example, .gitignore additions (playwright, supabase local)
 - ✅ Initial commit + pushed to https://github.com/nuckecy/mReport
 
-### Day 0.5 — Reframe for platform integration 🟡
-
-This wasn't in the original plan. Discovered when the user shared platform schema.
+### Day 0.5 — Reframe for platform integration ✅
 
 - ✅ Read platform schema markdown (saved at `docs/platform-schema.md`)
-- ✅ Investigated existing platform code (event-calendar app at
-  `/Users/otobong.okoko/Sandbox-Vibe/vibecoding/event-calendar/`) — found full
-  reference implementation: middleware, auth helpers, role checks, schema
+- ✅ Investigated existing platform code (event-calendar app)
 - ✅ Captured findings in `docs/ARCHITECTURE.md` (auth flavor = Hybrid, table
   prefix = `mreport_`, RLS uses `core_tenant_user_roles`)
 - ✅ Captured platform integration plan in `docs/PLATFORM-INTEGRATION.md`
-- ✅ Created this `PROGRESS.md` and `CLAUDE.md` for cross-session continuity
-- ⬜ **Rework `0001_init.sql`** — change prefix `q7m2_` → `mreport_`, drop
-  `mreport_members`/`mreport_regions`/`mreport_parishes` standalone identity,
-  rebuild around `core_*` integration:
-  - mReport tables: `mreport_regions`, `mreport_parishes`, `mreport_user_scopes`,
-    `mreport_reports`, `mreport_report_lines`, `mreport_audit_log`,
-    `mreport_tenant_settings`
-  - Add a one-time data migration to register `('mreport')` in `core_apps`
-- ⬜ Adjust `src/lib/validation/rules.ts` — same content, but doc updates around
-  `tenant_id` carrying through every check
-- ⬜ Add `docs/auth-investigation.md` with the full investigation report (raw
-  findings) for future reference
+- ✅ Created `PROGRESS.md`, `CLAUDE.md`, `docs/auth-investigation.md`
+- ✅ Decisions logged: tenant URL pattern (`<slug>.churchplatform.com/mreport`),
+  mReport's own role vocabulary, shared service-role key
 
-### Day 1 — Platform integration setup 🚫 BLOCKED
+### Day 1 — Platform integration setup ✅
 
-Blocking on user inputs (see "Blockers" section below).
-
-- ⬜ Decide: do we use the same Supabase project as event-calendar (recommended)
-  or a separate one (would require JWT trust setup)?
-- ⬜ Get Supabase credentials wired into `.env.local`
-- ⬜ Run revised `0001_mreport_init.sql` against the platform DB
-- ⬜ Insert `('mreport', 'mReport', ...)` row into `core_apps`
-- ⬜ Write `0002_mreport_rls_policies.sql` — policies that join through
-  `core_tenant_user_roles` for role checks (mirroring event-calendar's pattern)
-- ⬜ Write `0003_mreport_seed.sql` — one tenant + super-admin
-  (`nuckecy@gmail.com`) + 1 region + 3 parishes + 5 mock members
-- ⬜ Configure Supabase Storage bucket for original .xlsx uploads (private,
-  tenant-scoped path)
-- ⬜ Verify everything via a one-off test script
+- ✅ `.env.local` written (gitignored) with shared Supabase credentials
+- ✅ Read event-calendar's auth + RLS patterns (`db/schema/core.ts`,
+  `drizzle/0001_rls_policies.sql`, `lib/auth/access.ts`)
+- ✅ Verified DB connection + platform pre-reqs (helper functions, `core_*` tables)
+- ✅ Removed obsolete `0001_init.sql` (with `q7m2_` prefix)
+- ✅ Wrote `0001_mreport_init.sql` — 7 `mreport_*` tables, 2 enums, indexes,
+  RLS enabled. References `core_*` for tenant/user FKs. timestamptz everywhere,
+  `created_at/updated_at` NOT NULL, `metadata jsonb`.
+- ✅ Wrote `0002_mreport_rls_policies.sql` — 8 policies using platform helpers
+  `is_platform_admin()` and `user_tenant_ids()`. mReport data is tenant-only
+  (no public reads) since it's financial.
+- ✅ Wrote `0003_mreport_seed_app.sql` — registers `mreport` in `core_apps`
+  (idempotent ON CONFLICT DO NOTHING)
+- ✅ Wrote `scripts/seed-mreport-bootstrap.ts` — creates Supabase Auth user,
+  links to `core_users`, sets `is_platform_admin=true`, adds tenant
+  membership + `super_admin` role, seeds 1 region + 3 parishes. Idempotent.
+  Run via `pnpm db:bootstrap`.
+- ✅ Applied all migrations to live platform DB; verified row counts match
+- ✅ Installed `tsx` and `dotenv` for the seed script
+- ⬜ Configure Supabase Storage bucket for original .xlsx uploads (deferred
+  to Day 4 when submit flow lands)
 
 ### Day 2 — Tenant + auth integration
 
@@ -157,24 +149,14 @@ Blocking on user inputs (see "Blockers" section below).
 
 ## Blockers (resolve before next work session)
 
-1. **Supabase project access**
-   - Need: project URL + anon key + service_role key for the **same** Supabase
-     project event-calendar uses. (Confirmed Day 0.5: same project, same DB,
-     mReport tables coexist with `core_*` and `cem_*`.)
-   - User said "I will provide all you need via MCP" — Supabase MCP needs to
-     be installed in Claude Code first (`claude mcp add supabase npx -- -y
-     @supabase/mcp-server-supabase@latest --access-token=YOUR_TOKEN`).
-   - Alternative (faster): user pastes the three credentials and we use them
-     directly without MCP.
+None right now — Day 2 (tenant middleware + auth integration) is unblocked.
 
-2. **Confirm same Supabase project as event-calendar.** The investigation found
-   the reference repo at `vibecoding/event-calendar/`. Read its `.env` (or ask
-   user) to confirm the project URL — if it differs from what user provides,
-   we have an architectural fork to resolve.
-
-3. **Platform schema deploy process.** When mReport's migration adds tables,
-   does the user run it directly, or is there a platform team / process to
-   route through? Affects iteration speed but not architecture.
+Past blockers (kept for history):
+- ~~Supabase project access~~ → resolved Day 1 by reading event-calendar/.env
+- ~~Confirm same Supabase project as event-calendar~~ → confirmed
+  (`qvptudtzilpqbaffyfge`)
+- ~~Platform schema deploy process~~ → I have psql + service-role key access;
+  user has been kept in the loop on each migration applied
 
 ---
 
@@ -202,7 +184,11 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** Stack: Next.js 16, TypeScript strict, Tailwind v4, shadcn-style, Cal.com tokens, Inter, Supabase EU, TanStack Query, Vercel
 - **2026-05-14** Single repo, Vitest + Playwright, `httpOnly` cookie sessions
 - **2026-05-14** Layout C chosen for failure cards; amber variant for outdated-template warning
-- **2026-05-14** Multi-tenant via subdomain (`<slug>.mreport.app`); tenant_id on every mReport row
-- **2026-05-14** Same Supabase project as event-calendar; mReport tables prefix `mreport_`
+- **2026-05-14** Multi-tenant via subdomain (`<slug>.churchplatform.com`); tenant_id on every mReport row
+- **2026-05-14** Same Supabase project as event-calendar (`qvptudtzilpqbaffyfge`, `eu-central-1` Frankfurt); mReport tables prefix `mreport_`
 - **2026-05-14** Auth flavor = **Hybrid** (Supabase Auth backend + custom platform layer); mirror event-calendar's `getSession({ appSlug })` pattern
 - **2026-05-14** Region/parish scope kept in mReport's own `mreport_user_scopes` table (not in `core_tenant_user_roles.role`)
+- **2026-05-14** Tenant URL pattern = `<slug>.churchplatform.com/mreport` (path-based app routing, matching event-calendar)
+- **2026-05-14** mReport-specific role vocabulary in `core_tenant_user_roles.role` (super_admin / regional_admin / parish_admin / preparer)
+- **2026-05-14** Service-role key shared with event-calendar (same project, only one key allowed); user accepts conversation-isolation risk and declined rotation
+- **2026-05-14** Day 1 applied: 7 mreport_* tables + RLS + mReport registered in core_apps + bootstrap super-admin (nuckecy@gmail.com) on `demo` tenant + 1 region + 3 parishes seeded

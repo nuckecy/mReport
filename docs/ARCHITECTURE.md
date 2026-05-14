@@ -231,6 +231,68 @@ parallel patterns, or lose context entirely.
 
 ---
 
+## 12. Tenant URL pattern: `<slug>.churchplatform.com/mreport`
+
+**Decision (2026-05-14, post-investigation):** mReport routes live under
+`/mreport/*` on the existing tenant subdomain (`<slug>.churchplatform.com`).
+Apps are differentiated by URL path, not by per-app subdomain.
+
+**Why:** Reading event-calendar's `middleware.ts` showed the platform's
+current model: subdomain identifies the tenant, app routes live under that.
+Introducing per-app subdomains (e.g., `<slug>.mreport.churchplatform.com`)
+would fork the platform's tenant-domain model and require DNS + middleware
+changes everywhere. Path-based app routing is what's already working.
+
+**Consequence:**
+- mReport's pages live at `/mreport/upload`, `/mreport/admin/members`, etc.
+- Middleware is shared across all apps on the platform — it does tenant
+  resolution; app routing is just paths.
+- mReport doesn't need to add a new wildcard DNS record; the existing
+  `*.churchplatform.com` covers it.
+
+## 13. Role vocabulary: mReport-specific (`super_admin / regional_admin / parish_admin / preparer`)
+
+**Decision (2026-05-14):** mReport uses its own role strings in
+`core_tenant_user_roles.role`, distinct from event-calendar's vocabulary
+(`member / lead / admin / superadmin / platform_admin`).
+
+**Why:** The platform's `core_tenant_user_roles.role` column is `text`
+specifically so each app can use vocabulary that fits its domain. mReport's
+roles map to church-finance-reporting concepts (region, parish, preparer)
+that don't have clean translations to event-calendar's generic
+member/lead/admin terms. Reading a role of `parish_admin` immediately tells
+you what the user does; `lead` would require domain knowledge to interpret.
+
+**Consequence:**
+- mReport-specific roles are distinct rows in `core_tenant_user_roles`
+  filtered by `app_id = mreport_app_id`.
+- A user can be `lead` in event-calendar AND `super_admin` in mReport for
+  the same tenant — different rows, no conflict.
+- Future admin tooling that spans apps will need to render role strings
+  app-aware. Document that as a known requirement when admin UI gets built.
+- `core_users.is_platform_admin = true` still bypasses everything — that's
+  a platform-level concern, not per-app.
+
+## 14. Service-role key shared with event-calendar
+
+**Decision (2026-05-14):** mReport uses the same Supabase service-role key
+as event-calendar, copied into mReport's `.env.local`. Both apps use the
+same key for the same project.
+
+**Why:** Same Supabase project = same key. Supabase only allows one
+service-role key per project. The user explicitly accepted the conversation-
+isolation risk (key was read in this session) and chose not to rotate.
+
+**Consequence:**
+- `.env.local` (gitignored) contains the same `SUPABASE_SERVICE_ROLE_KEY`
+  value as `event-calendar/.env`.
+- If the key ever leaks, both apps are affected — a single rotation fixes
+  both, but coordination is needed (update both .env files at once).
+- Production deployments: Vercel env vars (one per app) — **same value**
+  across both apps' Vercel projects.
+
+---
+
 ## Decisions still to make (not yet locked in)
 
 These are listed in `PROGRESS.md` under "Open questions" and "Blockers."
@@ -241,4 +303,5 @@ Add to ARCHITECTURE.md once locked:
 - Storage path convention for original .xlsx uploads
 - Whether RLS policies use a `current_tenant_id()` SQL function or read
   from JWT claims directly (mirror event-calendar's choice)
-- EU residency confirmation
+- EU residency confirmation (event-calendar uses `eu-central-1` Frankfurt
+  per its `.env` comment — confirmed ✓)
