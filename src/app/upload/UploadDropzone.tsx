@@ -44,6 +44,7 @@ import type { SubmitReportResult } from "@/lib/submit";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { TemplateBanner } from "@/components/failure/TemplateBanner";
 import { CompactSummary } from "@/components/failure/CompactSummary";
+import { ParsedDetails } from "./ParsedDetails";
 
 // ── State machine ────────────────────────────────────────────────────
 
@@ -391,6 +392,7 @@ function ParsedView({
         />
         <SubmissionFeedback submission={submission} onAmend={(note) => void onSubmit(note)} />
         <Downloads onDownloadJSON={onDownloadJSON} onDownloadXLSX={onDownloadXLSX} />
+        <ParsedDetails report={report} />
       </div>
     );
   }
@@ -457,6 +459,7 @@ function ParsedView({
       ) : null}
 
       <Downloads onDownloadJSON={onDownloadJSON} onDownloadXLSX={onDownloadXLSX} />
+      <ParsedDetails report={report} />
     </div>
   );
 }
