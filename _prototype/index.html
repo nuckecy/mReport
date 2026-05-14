@@ -1,0 +1,3495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>mReport — Parish Report Extractor</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --good: #22c55e;
+    --bad: #ef4444;
+    --warn: #f59e0b;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  header .sub { color: var(--muted); font-size: 13px; }
+  main { padding: 32px; max-width: 1100px; margin: 0 auto; }
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--panel);
+  }
+  .drop.drag { border-color: var(--accent); background: #1e3a4a; }
+  .drop p { margin: 8px 0; }
+  .drop .hint { color: var(--muted); font-size: 13px; }
+  input[type=file] { display: none; }
+  .actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  button {
+    background: var(--accent);
+    border: none;
+    color: #0f172a;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button:hover { opacity: 0.9; }
+  .report { margin-top: 32px; }
+  .report h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 24px 0 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  th {
+    background: var(--panel-2);
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.muted { color: #475569; }
+  td.flag, th.flag { text-align: center; }
+  /* ---- Lucide icon defaults ---- */
+  .lucide-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: -3px;
+    flex-shrink: 0;
+  }
+  .lucide-icon.size-12 { width: 12px; height: 12px; vertical-align: -2px; }
+  .lucide-icon.size-14 { width: 14px; height: 14px; vertical-align: -2px; }
+  .lucide-icon.size-18 { width: 18px; height: 18px; vertical-align: -4px; }
+  .lucide-icon.size-20 { width: 20px; height: 20px; vertical-align: -4px; }
+  .lucide-icon.size-24 { width: 24px; height: 24px; vertical-align: -5px; }
+  .lucide-icon.size-32 { width: 32px; height: 32px; vertical-align: -7px; }
+  /* When the icon is the only content of its container (e.g. button or chip), strip the inline-baseline offset */
+  .lucide-icon.no-offset { vertical-align: middle; }
+  .buildup {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 8px;
+  }
+  .buildup .field { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .buildup .formula {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .buildup .formula .zero { color: #475569; }
+  .buildup .formula .op { color: var(--muted); margin: 0 4px; }
+  .buildup .formula .label { color: var(--muted); font-size: 11px; vertical-align: super; margin-left: 2px; }
+  .buildup .formula .equals { color: var(--accent); font-weight: 600; }
+  .buildup .result { font-weight: 700; color: var(--good); }
+  details.section {
+    margin-top: 24px;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+  }
+  details.section > summary {
+    cursor: pointer;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 600;
+    list-style: none;
+    padding: 6px 0;
+    user-select: none;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary::before {
+    content: "▸ ";
+    color: var(--accent);
+    display: inline-block;
+    transition: transform 0.15s;
+    margin-right: 4px;
+  }
+  details.section[open] > summary::before { transform: rotate(90deg); }
+  details.section > summary .badge {
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin-left: 8px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+  details.section > summary .badge.good { background: #14532d; color: var(--good); }
+  details.section > summary .badge.bad { background: #4c1d1d; color: var(--bad); }
+  details.section > summary .badge.warn { background: #3a2e1a; color: var(--warn); }
+  details.section .body { margin-top: 12px; }
+  .sanity { display: grid; gap: 8px; }
+  .sanity .item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    font-size: 13px;
+  }
+  .sanity .item .icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .sanity .item.ok .icon { color: var(--good); }
+  .sanity .item.warn .icon { color: var(--warn); }
+  .sanity .item.fail .icon { color: var(--bad); }
+  .sanity .item .detail { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .pos { color: var(--good); font-weight: 600; }
+  .neg { color: var(--bad); font-weight: 600; }
+  .warn-row td { background: #3a2e1a; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .err {
+    background: #3a1a1a;
+    border: 1px solid var(--bad);
+    color: #fecaca;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .summary {
+    margin-top: 24px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .summary.ok { background: #052e1a; border-color: var(--good); }
+  .summary.bad { background: #3a1a1a; border-color: var(--bad); }
+  .summary.partial { background: #3a2e1a; border-color: var(--warn); }
+  .summary .title { font-weight: 700; font-size: 16px; }
+  .summary .ok .title { color: var(--good); }
+  .summary .stats { color: var(--muted); font-size: 13px; }
+  .summary ul { margin: 8px 0 0; padding-left: 20px; font-size: 13px; }
+  .summary ul li { margin: 2px 0; }
+  .summary-detail { width: 100%; margin-top: 4px; }
+  /* ---- Outdated-template warning ---- */
+  .tw {
+    margin: 24px 0;
+    border-radius: 14px;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .tw .variant-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    opacity: 0.7;
+    margin-bottom: 4px;
+  }
+  .tw header { display: flex; align-items: flex-start; gap: 14px; }
+  .tw .icon-circle {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .tw .title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+  .tw .subtitle { font-size: 14px; line-height: 1.5; opacity: 0.85; }
+  .tw .detail-card {
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    padding: 16px 20px;
+    border-left: 4px solid currentColor;
+  }
+  .tw .detail-card .detail-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+    margin-bottom: 10px;
+  }
+  .tw .issue {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .tw .issue:last-child { border-bottom: none; padding-bottom: 0; }
+  .tw .issue:first-child { padding-top: 0; }
+  .tw .issue-title { font-weight: 700; font-size: 14px; }
+  .tw .rate-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+  }
+  .tw .rate-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .tw .rate-badge.bad { background: rgba(239, 68, 68, 0.18); color: #fca5a5; text-decoration: line-through; }
+  .tw .rate-badge.good { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+  .tw .rate-arrow { opacity: 0.5; }
+  .tw .issue-meta { font-size: 12px; opacity: 0.7; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  .tw .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .tw .btn {
+    border: none;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .tw .btn:hover { opacity: 0.9; }
+  .tw .btn:active { transform: translateY(1px); }
+  .tw .btn-secondary {
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+  }
+  .tw.amber { background: linear-gradient(135deg, #2a1f0a 0%, #1f1607 100%); color: #fde68a; border: 1px solid #92400e; }
+  .tw.amber .icon-circle { background: #78350f; color: #fbbf24; }
+  .tw.amber .title { color: #fef3c7; }
+  .tw.amber .detail-card { color: #f59e0b; }
+  .tw.amber .detail-card .issue-title { color: #fef3c7; }
+  .tw.amber .detail-card .issue-meta { color: #fde68a; opacity: 0.65; }
+  .tw.amber .btn-primary { background: #f59e0b; color: #1f1300; }
+  .check-tag {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+    font-weight: 600;
+  }
+  .check-tag.template { background: #3a2e1a; color: var(--warn); }
+  .check-tag.preparer { background: #4c1d1d; color: var(--bad); }
+
+  /* ---- Rich failure cards ---- */
+  .failure-list { display: grid; gap: 12px; margin-top: 14px; }
+  .failure-card {
+    border-radius: 10px;
+    padding: 18px 20px;
+    border: 1px solid;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .failure-card.fail { background: #2a0e0e; border-color: var(--bad); color: #fecaca; }
+  .failure-card.warn { background: #2a1f0a; border-color: var(--warn); color: #fde68a; }
+  .failure-card.info { background: #0e1f2a; border-color: var(--accent); color: #bae6fd; }
+
+  /* Header: cell address + field name as the card subject */
+  .failure-card .card-subject {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .failure-card .subject-text {
+    font-weight: 700;
+    font-size: 15px;
+    color: inherit;
+    filter: brightness(1.2);
+  }
+  .failure-card .subject-text .cell-ref {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: all;
+    margin-right: 6px;
+    font-size: 13px;
+  }
+  .failure-card .subject-text .cell-ref:hover { background: rgba(0,0,0,0.5); }
+  .failure-card .subtype-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* Body content shared utilities */
+  .failure-card .card-cause {
+    font-size: 12px;
+    line-height: 1.5;
+    opacity: 0.7;
+    font-style: italic;
+  }
+  .failure-card .card-cause:before { content: "Probable cause: "; opacity: 0.7; font-style: normal; font-weight: 600; }
+
+  .failure-card.layout-c .card-headline {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .failure-card.layout-c .compare-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .failure-card.layout-c .compare-list li {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 10px;
+    font-size: 14px;
+    align-items: baseline;
+  }
+  .failure-card.layout-c .compare-list .li-label {
+    opacity: 0.7;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+  .failure-card.layout-c .compare-list .li-value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .failure-card.layout-c .compare-list .li-source {
+    opacity: 0.65;
+    font-weight: 400;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+
+  /* Fix CTA — shared across layouts */
+  .failure-card .card-fix {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+  }
+  .failure-card .fix-text {
+    font-size: 13px;
+    opacity: 0.85;
+    font-style: italic;
+  }
+  .failure-card .fix-btn {
+    border: none;
+    padding: 9px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .failure-card .fix-btn:hover { opacity: 0.9; }
+  .failure-card .fix-btn:active { transform: translateY(1px); }
+  .failure-card.warn .fix-btn { background: var(--warn); color: #1f1300; }
+  .failure-card.info .fix-btn { background: var(--accent); color: #061a26; }
+  .failure-card .fix-btn[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .copy-toast {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--good);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .copy-toast.show { opacity: 1; }
+
+
+  /* ---- Compact-summary view (100% clean reports) ---- */
+  .compact-summary {
+    margin-top: 24px;
+    padding: 32px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #052e1a 0%, #04200f 100%);
+    border: 1px solid var(--good);
+    color: #d1fae5;
+  }
+  .compact-summary .compact-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .compact-summary .compact-icon {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--good);
+    color: #052e1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .compact-summary .compact-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0fdf4;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+  .compact-summary .compact-subtitle {
+    font-size: 14px;
+    color: #bbf7d0;
+    opacity: 0.85;
+  }
+  .compact-summary .compact-checklist {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .compact-summary .compact-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .compact-summary .compact-row .check {
+    color: var(--good);
+    font-size: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .compact-summary .compact-row .row-label {
+    flex: 1;
+    color: #f0fdf4;
+    font-weight: 600;
+  }
+  .compact-summary .compact-row .row-detail {
+    color: #bbf7d0;
+    opacity: 0.7;
+    font-size: 13px;
+  }
+  .compact-summary .compact-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .compact-summary .compact-btn {
+    background: var(--good);
+    color: #052e1a;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .compact-summary .compact-btn:hover { opacity: 0.9; }
+  .compact-summary .compact-btn-secondary {
+    background: transparent;
+    border: 1px solid #bbf7d0;
+    color: #bbf7d0;
+  }
+
+  /* ---- Fixes Applied log ---- */
+  .fixes-log {
+    margin-top: 24px;
+    padding: 14px 18px;
+    background: #052e1a;
+    border: 1px solid var(--good);
+    border-radius: 10px;
+    color: #bbf7d0;
+  }
+  .fixes-log .log-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--good);
+    margin-bottom: 10px;
+  }
+  .fixes-log .log-title .count {
+    background: var(--good);
+    color: #052e1a;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+  }
+  .fixes-log .log-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(34, 197, 94, 0.15);
+    font-size: 13px;
+  }
+  .fixes-log .log-row:last-child { border-bottom: none; }
+  .fixes-log .log-time {
+    font-variant-numeric: tabular-nums;
+    color: rgba(187, 247, 208, 0.55);
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  .fixes-log .log-detail {
+    color: #d1fae5;
+  }
+  .fixes-log .log-detail strong { color: #f0fdf4; font-weight: 600; }
+  .fixes-log .log-cell {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    background: rgba(0,0,0,0.25);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+  .fixes-log .log-change {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+  }
+  .fixes-log .log-change .old {
+    color: rgba(252, 165, 165, 0.7);
+    text-decoration: line-through;
+  }
+  .fixes-log .log-change .arrow { opacity: 0.5; margin: 0 6px; }
+  .fixes-log .log-change .new {
+    color: var(--good);
+    font-weight: 700;
+  }
+  .ok-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #14532d; color: var(--good); margin-left: 8px; }
+  .bad-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #4c1d1d; color: var(--bad); margin-left: 8px; }
+  footer { color: var(--muted); font-size: 12px; padding: 24px 32px; text-align: center; border-top: 1px solid var(--border); margin-top: 48px; }
+  details { margin-top: 12px; color: var(--muted); font-size: 13px; }
+  details pre { background: #020617; padding: 12px; border-radius: 6px; overflow: auto; max-height: 300px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>mReport</h1>
+    <div class="sub">Parish report extractor — drop an .xlsx, get the structured summary.</div>
+  </div>
+  <div class="sub" id="filename"></div>
+</header>
+
+<main>
+  <label class="drop" id="drop">
+    <p><strong>Drop a parish report .xlsx here</strong></p>
+    <p class="hint">or click to browse · runs entirely in your browser, no upload</p>
+    <input type="file" id="file" accept=".xlsx,.xls" />
+  </label>
+
+  <div id="errors"></div>
+
+  <div id="report" class="report"></div>
+</main>
+
+<footer>mReport prototype · client-side only · <span id="version">v0.1</span> · <a href="?demo=errors" style="color:var(--muted);text-decoration:underline">error showcase</a></footer>
+
+<script>
+// ============================================================
+//  CONFIG
+// ============================================================
+
+// URL of the canonical parish-report template. Update when you have the link.
+// The "outdated template" banner points users here.
+const CORRECT_TEMPLATE_URL = "https://example.com/CORRECT-TEMPLATE-LINK-PLACEHOLDER";
+
+// Canonical remittance percentage rules. Used both for validation and for detecting
+// templates whose built-in formulas use different rates.
+const CANONICAL_RULES = {
+  regional: { offering: 0.05, tithe: 0.20 },
+  parishOps: { tithe: 0.55, offering: 0.95, thanksgiving: 0.30 },
+  pastorAllow: { tithe: 0.20, thanksgiving: 0.70 },
+  provincial: { tithe: 0.05 },
+};
+
+// Per-section severity. Edit this map to re-grade what counts as a hard failure
+// vs a warning, without touching the validation logic.
+//   "fail" = red, money/allocation level — must be fixed
+//   "warn" = amber, data is intact but totals are out of sync — should be fixed
+//   "info" = blue, cosmetic / acceptable rounding
+// Falls back to "_default" if a section isn't listed.
+const FIELD_SEVERITY = {
+  // Money / allocation — always fail
+  "Allocation Reconciliation": "fail",
+  "Regional Remittance":       "fail",
+  "Parish Operations":         "fail",
+  "Pastor Allowance":          "fail",
+  "Provincial Remittance":     "fail",
+  "Weekly Totals":             "fail",
+  "Per-Date Money":            "fail",
+
+  // Parish Records — fail for monetary totals, warn for averages (rounding common)
+  "Parish Records":            "fail", // overridden per-label below for averages
+  "Per-Date Attendance":       "warn",
+
+  // Statistics — warning (data intact, totals row often forgotten)
+  "Statistics":                "warn",
+
+  "_default":                  "fail",
+};
+
+// Per-LABEL severity overrides (more specific than per-section).
+// Each entry: { pattern: RegExp matched against check.label, severity }.
+// First match wins. Used when the same section has fields with different severities.
+const LABEL_SEVERITY = [
+  // Demographic averages tolerate small rounding differences
+  { pattern: /average/i, severity: "warn" },
+];
+
+// ============================================================
+//  PARSER — label-tolerant
+// ============================================================
+
+const NUM = (v) => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  return isNaN(n) ? 0 : n;
+};
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Find a cell whose value matches `pattern` (string substring or RegExp), case-insensitive.
+// Returns {r, c, value} or null. Searches the first sheet by default.
+function findCell(sheet, pattern, opts = {}) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const isRe = pattern instanceof RegExp;
+  const startR = opts.startR ?? range.s.r;
+  const endR = opts.endR ?? range.e.r;
+  for (let r = startR; r <= endR; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim();
+      if (!s) continue;
+      if (isRe ? pattern.test(s) : s.toLowerCase().includes(String(pattern).toLowerCase())) {
+        return { r, c, value: cell.v, raw: s };
+      }
+    }
+  }
+  return null;
+}
+
+function findAllCells(sheet, pattern) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const isRe = pattern instanceof RegExp;
+  const out = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim();
+      if (!s) continue;
+      if (isRe ? pattern.test(s) : s.toLowerCase() === String(pattern).toLowerCase()) {
+        out.push({ r, c, value: cell.v, raw: s });
+      }
+    }
+  }
+  return out;
+}
+
+// Walk right from (r, c) collecting the next non-empty cell as the "value to the right of the label".
+// IMPORTANT: this stops at the next non-empty cell on the same row — if other LABELS sit on
+// the same row (e.g., "Name Of Parish" at F3 and "Pastor In Charge" at K3 with empty cells
+// between them), this will incorrectly return the next label as the value. Use
+// valueForHeaderLabel() instead for header-row labels whose values sit BELOW the label.
+function valueRightOf(sheet, label, opts = {}) {
+  const hit = findCell(sheet, label, opts);
+  if (!hit) return null;
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let c = hit.c + 1; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c })];
+    if (cell && cell.v != null && String(cell.v).trim() !== "") {
+      return cell.v;
+    }
+  }
+  return null;
+}
+
+// Resolve the value for a header-row label by checking the cell DIRECTLY BELOW first
+// (the most common parish-report layout: labels in row 3, values in row 4). Falls back
+// to right-walking if the cell below is empty. Avoids the "next label on the same row"
+// bug where, e.g., F3="Name Of Parish" and K3="Pastor In Charge" both sit on the same row.
+function valueForHeaderLabel(sheet, label) {
+  const hit = findCell(sheet, label);
+  if (!hit) return null;
+  // 1. Try the cell directly below
+  const below = sheet[XLSX.utils.encode_cell({ r: hit.r + 1, c: hit.c })];
+  if (below && below.v != null && String(below.v).trim() !== "") {
+    return below.v;
+  }
+  // 2. Fall back to right-walking (legacy layouts where label and value share a row)
+  return valueRightOf(sheet, label);
+}
+
+// Scan every cell in the sheet for a string matching `pattern`. Returns the first
+// match (trimmed) or null. Used as a fallback when label-based lookups (e.g.,
+// valueRightOf("Email")) come up empty because of template variation.
+function scanSheetFor(sheet, pattern) {
+  if (!sheet || !sheet["!ref"]) return null;
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim();
+      if (!s) continue;
+      if (pattern.test(s)) return s;
+    }
+  }
+  return null;
+}
+
+// Email fallback: anything matching a basic email shape.
+function findEmailInSheet(sheet) {
+  return scanSheetFor(sheet, /^[\w.+-]+@[\w-]+\.[\w.-]+$/);
+}
+
+// Mobile fallback: phone-shaped strings — 7+ digits with optional +, spaces, dashes,
+// parentheses. Avoid matching Excel serial dates by requiring at least one non-digit
+// formatting char OR a leading + OR a length of >= 9.
+function findMobileInSheet(sheet) {
+  if (!sheet || !sheet["!ref"]) return null;
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim();
+      if (!s) continue;
+      // Require phone-y characters and at least 7 digits total.
+      if (!/^[\+\d\s\-().]+$/.test(s)) continue;
+      const digitCount = (s.match(/\d/g) || []).length;
+      if (digitCount < 7) continue;
+      // Reject pure-numeric cells under 7 digits or that look like years/serials.
+      const looksFormatted = /[\s\-+().]/.test(s);
+      if (!looksFormatted && digitCount < 9) continue;
+      return s;
+    }
+  }
+  return null;
+}
+
+function excelDateToJS(serial) {
+  if (serial instanceof Date) return serial;
+  if (typeof serial === "number") {
+    // Excel serial → local-midnight Date (no timezone shift). Each integer is a calendar day.
+    const days = Math.floor(serial - 25569);
+    const d = new Date(1970, 0, 1);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+  if (typeof serial === "string") {
+    return parseStringDate(serial);
+  }
+  return null;
+}
+
+// Parse common date string formats found in parish reports.
+// Supports: DD.MM.YYYY (German), DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD.
+// Returns a local-midnight Date, or null if unparseable.
+function parseStringDate(s) {
+  if (!s) return null;
+  const trimmed = String(s).trim();
+  // ISO YYYY-MM-DD
+  let m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  // DD.MM.YYYY (German format used in old template)
+  m = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+  if (m) {
+    const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    return new Date(year, Number(m[2]) - 1, Number(m[1]));
+  }
+  // DD/MM/YYYY or MM/DD/YYYY — assume DD/MM since the template is European.
+  m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    return new Date(year, Number(m[2]) - 1, Number(m[1]));
+  }
+  // Fallback: native Date constructor.
+  const d = new Date(trimmed);
+  return isNaN(d) ? null : d;
+}
+
+// Format a date as YYYY-MM-DD using LOCAL components (not UTC) to avoid off-by-one.
+function ymd(d) {
+  if (!(d instanceof Date) || isNaN(d)) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function detectMonthYear(sheet) {
+  // Strategy: find all dates that look like Sunday entries (in the WEEK blocks),
+  // pick the most common month/year among them.
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const dates = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell) continue;
+      // ONLY treat cells as dates when they're actually typed as dates by Excel/SheetJS.
+      // Earlier versions converted every numeric cell via excelDateToJS — that caused
+      // attendance counts (e.g. M8=1) to be misread as 1899-12-31, which then outvoted
+      // the real Sunday dates and produced "March 1900" as the report month.
+      let d = null;
+      if (cell.t === "d" || cell.v instanceof Date) {
+        const raw = cell.v instanceof Date ? cell.v : new Date(cell.v);
+        if (!isNaN(raw)) {
+          // Re-anchor UTC-midnight Date to local components (SheetJS returns UTC for serials).
+          d = new Date(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate());
+        }
+      } else if (cell.t === "n" && cell.w && /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(cell.w)) {
+        const raw = new Date(cell.w);
+        if (!isNaN(raw)) d = raw;
+      } else if (cell.t === "s" && typeof cell.v === "string") {
+        // Old templates store dates as text (e.g., "05.10.2025"). Only count strings
+        // that look like dates so we don't pull in random text cells.
+        if (/^\d{1,2}[.\/\-]\d{1,2}[.\/\-]\d{2,4}$/.test(cell.v.trim()) || /^\d{4}-\d{1,2}-\d{1,2}$/.test(cell.v.trim())) {
+          d = parseStringDate(cell.v);
+        }
+      }
+      // Defensive guard: reject any date before year 2000. Excel's date epoch starts at 1900,
+      // so any small numeric stray that slips through here would land in early 1900s and skew
+      // the tally. No real parish report is from before 2000.
+      if (d && d.getFullYear() >= 2000) {
+        dates.push(d);
+      }
+    }
+  }
+  // Look only at dates that fall on a Sunday (these are the WEEK markers in the template)
+  const sundays = dates.filter((d) => d.getDay() === 0);
+  const pool = sundays.length ? sundays : dates;
+  if (!pool.length) return { month: null, year: null, label: "Unknown" };
+  // Tally (year, month) frequency
+  const tally = {};
+  for (const d of pool) {
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    tally[key] = (tally[key] || 0) + 1;
+  }
+  const [bestKey] = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+  const [year, month] = bestKey.split("-").map(Number);
+  return { month, year, label: `${MONTHS[month]} ${year}` };
+}
+
+// ============================================================
+// Per-date extraction
+// ============================================================
+// For every WEEK block, locate its column header row (Date|Days|Men|Women|Children|Total|Offering|Tithe|Tnx_Giving|Others|Total),
+// then walk every row below until the next "Total" line, capturing each dated row.
+function extractPerDateRows(sheet) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const headerHits = findAllCells(sheet, /^offering$/i); // every WEEK block has its own "Offering" header
+  const rows = [];
+
+  for (const hit of headerHits) {
+    // Map columns on this header row.
+    const cols = {};
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim().toLowerCase();
+      if (s === "date") cols.date = c;
+      else if (s === "days") cols.days = c;
+      else if (s === "men") cols.men = c;
+      else if (s === "women") cols.women = c;
+      else if (s === "children") cols.children = c;
+      else if (s === "total") cols.totalAttendance = c; // first "Total" within the attendance group
+      else if (s === "offering") cols.offering = c;
+      else if (s === "tithe") cols.tithe = c;
+      else if (/tnx[_\s]?giving|thanksgiving|tnx giving/.test(s)) cols.thanksgiving = c;
+      else if (s === "others") cols.others = c;
+      else if (/^total\s*\(?€\)?$/.test(s)) cols.totalMoney = c;
+    }
+
+    // Walk down up to ~8 rows looking for dated entries (Sunday + Midweek1/2/3 typically).
+    for (let r = hit.r + 1; r <= Math.min(hit.r + 8, range.e.r); r++) {
+      const dayCell = cols.days != null ? sheet[XLSX.utils.encode_cell({ r, c: cols.days })] : null;
+      const dateCell = cols.date != null ? sheet[XLSX.utils.encode_cell({ r, c: cols.date })] : null;
+      const dayLabel = dayCell && dayCell.v != null ? String(dayCell.v).trim() : "";
+
+      // Stop at end-of-section markers. The "Total" / "Monthly Average" labels can appear in either
+      // the Date column (B) OR the Days column (C) depending on the template, so we sweep all
+      // cells on this row and break if we see any of these section-terminator labels.
+      let isSectionEnd = false;
+      for (let cc = range.s.c; cc <= range.e.c; cc++) {
+        const cv = sheet[XLSX.utils.encode_cell({ r, c: cc })];
+        if (!cv || cv.v == null) continue;
+        const s = String(cv.v).trim().toLowerCase();
+        if (s === "total" || s === "monthly average" || /^week\s*\d+/i.test(s)) {
+          isSectionEnd = true;
+          break;
+        }
+      }
+      if (isSectionEnd) break;
+
+      // Include rows with EITHER a date OR a day label (so empty midweek rows still appear if labelled).
+      const hasDate = dateCell && dateCell.v != null;
+      if (!hasDate && !dayLabel) continue;
+
+      const get = (key) => {
+        if (cols[key] == null) return null;
+        const cell = sheet[XLSX.utils.encode_cell({ r, c: cols[key] })];
+        return cell && cell.v != null ? cell.v : null;
+      };
+
+      let dateVal = get("date");
+      if (typeof dateVal === "number") {
+        const d = excelDateToJS(dateVal);
+        if (d) dateVal = d;
+      } else if (dateVal instanceof Date) {
+        // SheetJS gives UTC-midnight; re-anchor to local components.
+        dateVal = new Date(dateVal.getUTCFullYear(), dateVal.getUTCMonth(), dateVal.getUTCDate());
+      } else if (typeof dateVal === "string" && dateVal.trim()) {
+        // Old templates store dates as text (e.g., "05.10.2025" in DD.MM.YYYY format).
+        const d = parseStringDate(dateVal);
+        if (d) dateVal = d;
+      }
+      // Normalize to local YYYY-MM-DD (avoid UTC shift that pushes Sunday Nov 2 -> Nov 1).
+      const dateLocal = dateVal instanceof Date ? ymd(dateVal) : (dateVal || null);
+
+      const men = NUM(get("men"));
+      const women = NUM(get("women"));
+      const children = NUM(get("children"));
+      const totalAtt = get("totalAttendance"); // may be null/0 for blank midweek rows
+      const offering = NUM(get("offering"));
+      const tithe = NUM(get("tithe"));
+      const thanksgiving = NUM(get("thanksgiving"));
+      const others = NUM(get("others"));
+      const totalMoney = get("totalMoney");
+
+      // Skip rows that are entirely blank (no values, no date, no day label).
+      const allBlank = !hasDate && !dayLabel && men + women + children + offering + tithe + thanksgiving + others === 0;
+      if (allBlank) continue;
+
+      rows.push({
+        row: r,
+        day: dayLabel,
+        date: dateLocal,
+        attendance: {
+          men, women, children,
+          totalReported: totalAtt != null ? NUM(totalAtt) : null,
+          totalCalculated: men + women + children,
+          validated: totalAtt != null ? Math.abs(NUM(totalAtt) - (men + women + children)) < 0.01 : null,
+        },
+        money: {
+          offering, tithe, thanksgiving, others,
+          totalReported: totalMoney != null ? NUM(totalMoney) : null,
+          totalCalculated: round2(offering + tithe + thanksgiving + others),
+          validated: totalMoney != null ? Math.abs(NUM(totalMoney) - (offering + tithe + thanksgiving + others)) < 0.01 : null,
+        },
+        // True if this row had any non-zero value (used for "Monthly Average" denominator decisions).
+        hasAttendance: men + women + children > 0,
+        hasMoney: offering + tithe + thanksgiving + others > 0,
+      });
+    }
+  }
+  return rows;
+}
+
+// Statistics column labels (M–X). Each parish report has 12 stat fields per week.
+const STAT_FIELDS = [
+  { key: "births", label: "Births" },
+  { key: "marriages", label: "Marriages" },
+  { key: "deaths", label: "Deaths" },
+  { key: "converts", label: "Converts" },
+  { key: "baptisms", label: "Baptisms" },
+  { key: "workers", label: "Workers" },
+  { key: "ministers", label: "Ministers" },
+  { key: "disciplinary", label: "Disciplinary" },
+  { key: "newParishes", label: "New Parishes" },
+  { key: "newNations", label: "New Nations" },
+  { key: "churchDedication", label: "Church Dedication" },
+  { key: "projects", label: "Projects" },
+];
+const STAT_LABEL_PATTERNS = {
+  births: /^births?$/i,
+  marriages: /^marriages?$/i,
+  deaths: /^deaths?$/i,
+  converts: /^converts?$/i,
+  baptisms: /^baptisms?$/i,
+  workers: /^workers?$/i,
+  ministers: /^ministers?$/i,
+  disciplinary: /^disciplinary\s*$/i,
+  newParishes: /^new\s*parishes?$/i,
+  newNations: /^new\s*nations?$/i,
+  churchDedication: /^church\s*dedication$/i,
+  projects: /^projects?$/i,
+};
+
+// Extract per-date statistics rows (one entry per dated row across all WEEK blocks).
+function extractPerDateStatistics(sheet) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const headerHits = findAllCells(sheet, /^births?$/i); // every weekly block has a "Births" header
+  const rows = [];
+
+  for (const hit of headerHits) {
+    // Map stat columns on this header row.
+    const cols = {};
+    let dateCol = null, daysCol = null;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim().toLowerCase();
+      if (s === "date") dateCol = c;
+      else if (s === "days") daysCol = c;
+      for (const f of STAT_FIELDS) {
+        if (STAT_LABEL_PATTERNS[f.key].test(s)) cols[f.key] = c;
+      }
+    }
+
+    // Walk down looking for dated entries (same logic as extractPerDateRows).
+    for (let r = hit.r + 1; r <= Math.min(hit.r + 8, range.e.r); r++) {
+      let isSectionEnd = false;
+      for (let cc = range.s.c; cc <= range.e.c; cc++) {
+        const cv = sheet[XLSX.utils.encode_cell({ r, c: cc })];
+        if (!cv || cv.v == null) continue;
+        const s = String(cv.v).trim().toLowerCase();
+        if (s === "total" || s === "monthly average" || /^week\s*\d+/i.test(s)) {
+          isSectionEnd = true;
+          break;
+        }
+      }
+      if (isSectionEnd) break;
+
+      let dateVal = dateCol != null ? (sheet[XLSX.utils.encode_cell({ r, c: dateCol })]?.v ?? null) : null;
+      if (typeof dateVal === "number") {
+        const d = excelDateToJS(dateVal);
+        if (d) dateVal = d;
+      } else if (dateVal instanceof Date) {
+        dateVal = new Date(dateVal.getUTCFullYear(), dateVal.getUTCMonth(), dateVal.getUTCDate());
+      }
+      const dateLocal = dateVal instanceof Date ? ymd(dateVal) : (dateVal || null);
+      const dayLabel = daysCol != null
+        ? String(sheet[XLSX.utils.encode_cell({ r, c: daysCol })]?.v ?? "").trim()
+        : "";
+      if (!dateLocal && !dayLabel) continue;
+
+      const stats = {};
+      let any = false;
+      for (const f of STAT_FIELDS) {
+        if (cols[f.key] == null) { stats[f.key] = 0; continue; }
+        const cell = sheet[XLSX.utils.encode_cell({ r, c: cols[f.key] })];
+        const v = cell && cell.v != null ? NUM(cell.v) : 0;
+        stats[f.key] = v;
+        if (v !== 0) any = true;
+      }
+
+      rows.push({ row: r, date: dateLocal, day: dayLabel, stats, hasAny: any });
+    }
+  }
+  return rows;
+}
+
+// Find the file's "Total" row that sits below the LAST weekly block's statistics
+// (e.g., row 48 for Mount Zion). Returns the entered totals per stat column.
+function readEnteredStatTotals(sheet) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const headerHits = findAllCells(sheet, /^births?$/i);
+  if (headerHits.length === 0) return null;
+  const lastHeader = headerHits[headerHits.length - 1];
+
+  // Map stat columns on the last header row.
+  const cols = {};
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: lastHeader.r, c })];
+    if (!cell || cell.v == null) continue;
+    const s = String(cell.v).trim().toLowerCase();
+    for (const f of STAT_FIELDS) {
+      if (STAT_LABEL_PATTERNS[f.key].test(s)) cols[f.key] = c;
+    }
+  }
+
+  // Find the FIRST "Total" row appearing AFTER the last header row (typically row 48).
+  // Skip the per-week "Total" row (which sits ~6 rows below the header) by looking further down.
+  for (let r = lastHeader.r + 6; r <= range.e.r; r++) {
+    let isTotal = false;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cv = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cv || cv.v == null) continue;
+      const s = String(cv.v).trim().toLowerCase();
+      if (s === "total") { isTotal = true; break; }
+    }
+    if (!isTotal) continue;
+    // Only treat this as the grand-total row if it has stat values populated.
+    // Track the cell ADDRESS for each total — needed for the auto-fix patch downloads.
+    const totals = {};
+    const addresses = {};
+    let populated = 0;
+    for (const f of STAT_FIELDS) {
+      if (cols[f.key] == null) { totals[f.key] = null; addresses[f.key] = null; continue; }
+      const addr = XLSX.utils.encode_cell({ r, c: cols[f.key] });
+      const cell = sheet[addr];
+      const v = cell && cell.v != null ? NUM(cell.v) : null;
+      totals[f.key] = v;
+      addresses[f.key] = addr;
+      if (v != null) populated++;
+    }
+    if (populated >= STAT_FIELDS.length / 2) return { row: r, totals, addresses, sheetName: null };
+  }
+  return null;
+}
+
+// For each WEEK block, find the "Total" row directly below it and capture
+// the entered € total. Returns [{weekIndex, totalRow, enteredTotal, dateRange[]}].
+function extractWeeklyTotals(sheet) {
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const headerHits = findAllCells(sheet, /^offering$/i);
+  const out = [];
+
+  headerHits.forEach((hit, idx) => {
+    // Locate the totalMoney column on this header row.
+    let totalMoneyCol = null;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim().toLowerCase();
+      if (/^total\s*\(?€\)?$/.test(s)) totalMoneyCol = c;
+    }
+    if (totalMoneyCol == null) return;
+
+    // Walk down looking for a "Total" label (in any column) within ~8 rows.
+    for (let r = hit.r + 1; r <= Math.min(hit.r + 8, range.e.r); r++) {
+      let isTotal = false;
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cv = sheet[XLSX.utils.encode_cell({ r, c })];
+        if (!cv || cv.v == null) continue;
+        if (String(cv.v).trim().toLowerCase() === "total") { isTotal = true; break; }
+      }
+      if (isTotal) {
+        const enteredCell = sheet[XLSX.utils.encode_cell({ r, c: totalMoneyCol })];
+        out.push({
+          weekIndex: idx + 1,
+          totalRow: r,
+          headerRow: hit.r,
+          enteredTotal: enteredCell && enteredCell.v != null ? NUM(enteredCell.v) : null,
+        });
+        break;
+      }
+    }
+  });
+  return out;
+}
+
+// Find the "Total" row at the bottom of the weekly section and read its monetary totals.
+function readGrandTotalRow(sheet) {
+  // The grand-total row is the row whose label cell contains "Total" alone (not "Monthly Average")
+  // AND which has a numeric value in the columns under Offering / Tithe / Tnx_Giving / Others.
+  // Strategy: find the header row containing "Offering", "Tithe", "Tnx_Giving", "Others",
+  // then walk down looking for the row whose "Total " label appears AND whose Tithe column has the largest value.
+  const headerHit = findCell(sheet, "Offering");
+  if (!headerHit) return null;
+  // Locate columns for offering / tithe / thanksgiving / others on that header row.
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const cols = {};
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: headerHit.r, c })];
+    if (!cell || cell.v == null) continue;
+    const s = String(cell.v).trim().toLowerCase();
+    if (s === "offering") cols.offering = c;
+    else if (s === "tithe") cols.tithe = c;
+    else if (/tnx[_\s]?giving|thanksgiving|tnx giving/.test(s)) cols.thanksgiving = c;
+    else if (s === "others") cols.others = c;
+  }
+  // Walk every "Total" / "Total " label in column G area (look for label row that has populated values in our cols).
+  const totalLabels = findAllCells(sheet, /^\s*total\s*$/i);
+  let best = null;
+  for (const lab of totalLabels) {
+    const vals = {};
+    for (const k of Object.keys(cols)) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: lab.r, c: cols[k] })];
+      vals[k] = cell ? NUM(cell.v) : 0;
+    }
+    const score = vals.tithe + vals.offering + vals.thanksgiving + vals.others;
+    if (!best || score > best.score) best = { row: lab.r, vals, score };
+  }
+  return best ? { row: best.row, ...best.vals, cols } : null;
+}
+
+function readMonthlyAverageTotal(sheet) {
+  const hit = findCell(sheet, "Monthly Average");
+  if (!hit) return null;
+  // The "Total" column is to the right; find the value labeled "Total" on the same header row as Men/Women/Children/Total.
+  // For our template, the Total is the last numeric value to the right on that row.
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  let last = null;
+  for (let c = hit.c + 1; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c })];
+    if (cell && typeof cell.v === "number") last = cell.v;
+  }
+  return last;
+}
+
+// Read the per-demographic monthly averages (Men/Women/Children) from the row labelled "Monthly Average".
+// Maps the values to columns by looking at the most recent attendance header row above.
+function readMonthlyAverageDemographics(sheet) {
+  const hit = findCell(sheet, "Monthly Average");
+  if (!hit) return { men: null, women: null, children: null };
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  // Find the closest header row above containing "Men", "Women", "Children".
+  let headerRow = null;
+  for (let r = hit.r - 1; r >= range.s.r; r--) {
+    let hasMen = false, hasWomen = false, hasChildren = false;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) continue;
+      const s = String(cell.v).trim().toLowerCase();
+      if (s === "men") hasMen = true;
+      else if (s === "women") hasWomen = true;
+      else if (s === "children") hasChildren = true;
+    }
+    if (hasMen && hasWomen && hasChildren) { headerRow = r; break; }
+  }
+  if (headerRow == null) return { men: null, women: null, children: null };
+  const cols = {};
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: headerRow, c })];
+    if (!cell || cell.v == null) continue;
+    const s = String(cell.v).trim().toLowerCase();
+    if (s === "men") cols.men = c;
+    else if (s === "women") cols.women = c;
+    else if (s === "children") cols.children = c;
+  }
+  const get = (col) => {
+    if (col == null) return null;
+    const cell = sheet[XLSX.utils.encode_cell({ r: hit.r, c: col })];
+    return cell && cell.v != null ? NUM(cell.v) : null;
+  };
+  return { men: get(cols.men), women: get(cols.women), children: get(cols.children) };
+}
+
+function readActualRemittance(sheet) {
+  // Each section is identified by a header phrase, the row below has labels (e.g. "5% of Offering"),
+  // and the row below that has the actual amounts.
+  const out = {
+    regional: { offering5: null, tithe20: null, total: null },
+    operations: { tithe55: null, offering95: null, thanksgiving30: null, total: null },
+    pastorAllow: { tithe20: null, thanksgiving70: null, total: null },
+    provincial: { tithe5: null },
+  };
+
+  function readLabelValuePair(labelPattern) {
+    // Find the label, then read the value cell directly below it.
+    const hit = findCell(sheet, labelPattern);
+    if (!hit) return null;
+    const cell = sheet[XLSX.utils.encode_cell({ r: hit.r + 1, c: hit.c })];
+    return cell ? NUM(cell.v) : null;
+  }
+
+  // Regional section
+  // NOTE: percentage regexes use (?<!\d) to prevent "5%" from matching inside "55%", etc.
+  out.regional.offering5 = readLabelValuePair(/(?<!\d)5%\s*of\s*offering/i);
+  out.regional.tithe20 = readLabelValuePair(/(?<!\d)20%\s*of\s*tithe$/i); // first "20% of Tithe" appears in Regional row
+  // The "Total Remittance" label appears in K51 area
+  out.regional.total = readLabelValuePair(/total\s*remittance/i);
+
+  // Parish Operations
+  out.operations.tithe55 = readLabelValuePair(/(?<!\d)55%\s*of\s*tithe/i);
+  out.operations.offering95 = readLabelValuePair(/(?<!\d)95%\s*of\s*offering/i);
+  out.operations.thanksgiving30 = readLabelValuePair(/(?<!\d)30%\s*of\s*t[\/\s]?giving|(?<!\d)30%\s*of\s*thanksgiving/i);
+  // Multiple "Total (€)" labels — find the one in the Parish Operations row by reading Row 55 mid-cells.
+  out.operations.total = (function () {
+    // Locate the "Twds. Parish Operations" header, then take the totals row two rows below.
+    const hdr = findCell(sheet, /twds\.?\s*parish\s*operations/i);
+    if (!hdr) return null;
+    // Look on the row containing the 55%/95%/30% values for a "Total (€)" label
+    const labels = findAllCells(sheet, /total\s*\(?€\)?/i);
+    for (const lab of labels) {
+      // Operations total row is the row immediately below the % labels under hdr.
+      // We pick the label that sits on the same row as the 55% label.
+      const cell = sheet[XLSX.utils.encode_cell({ r: lab.r + 1, c: lab.c })];
+      if (cell && typeof cell.v === "number" && Math.abs(cell.v - ((out.operations.tithe55 ?? 0) + (out.operations.offering95 ?? 0) + (out.operations.thanksgiving30 ?? 0))) < 1) {
+        return cell.v;
+      }
+    }
+    return null;
+  })();
+
+  // Pastor Allowance — the SECOND "20% of Tithe" + "70% of T/Giving"
+  out.pastorAllow.thanksgiving70 = readLabelValuePair(/(?<!\d)70%\s*of\s*t[\/\s]?giving|(?<!\d)70%\s*of\s*thanksgiving/i);
+  // For pastorAllow.tithe20 we need the SECOND occurrence of "20% of Tithe" (or a label "20% of Tithes").
+  out.pastorAllow.tithe20 = (function () {
+    const hits = findAllCells(sheet, /(?<!\d)20%\s*of\s*tithes?$/i);
+    if (hits.length >= 2) {
+      const second = hits[1];
+      const cell = sheet[XLSX.utils.encode_cell({ r: second.r + 1, c: second.c })];
+      return cell ? NUM(cell.v) : null;
+    }
+    return null;
+  })();
+  out.pastorAllow.total = (function () {
+    // Pastor allowance total is the "Total (€)" on the same row as the 70% value.
+    const hit = findCell(sheet, /(?<!\d)70%\s*of\s*t[\/\s]?giving/i);
+    if (!hit) return null;
+    const labels = findAllCells(sheet, /total\s*\(?€\)?/i);
+    for (const lab of labels) {
+      if (lab.r === hit.r) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: lab.r + 1, c: lab.c })];
+        if (cell) return NUM(cell.v);
+      }
+    }
+    return null;
+  })();
+
+  // Provincial: 5% of Tithe
+  out.provincial.tithe5 = readLabelValuePair(/(?<!\d)5%\s*of\s*tithe/i);
+
+  return out;
+}
+
+// Detect whether the file uses the current canonical template, or an outdated one.
+// Returns { valid, issues[] } where each issue is { kind: "structural"|"formula", message, detail }.
+// Used by the UI to show an "outdated template" banner and tag failed checks correctly.
+function detectTemplateValidity(sheet, totals, actualRemittance) {
+  const issues = [];
+
+  // ---- Structural checks ----
+  // 1. Required Row 1 labels exist somewhere in the file.
+  const requiredLabels = [
+    { name: "Name Of Parish", patterns: [/name\s*of\s*parish/i] },
+    { name: "Pastor In Charge", patterns: [/pastor\s*in\s*charge/i] },
+    { name: "Month/Year", patterns: [/month\s*\/?\s*year/i] },
+  ];
+  for (const req of requiredLabels) {
+    const found = req.patterns.some(p => findCell(sheet, p));
+    if (!found) {
+      issues.push({
+        kind: "structural",
+        message: `Missing label: "${req.name}"`,
+        detail: "The current template includes this label in the header row.",
+      });
+    }
+  }
+
+  // 2. Section headers expected.
+  const sectionLabels = [
+    { name: "Regional Remittance", patterns: [/regional\s*remittance/i] },
+    { name: "Parish Operations", patterns: [/twds\.?\s*parish\s*operations|parish\s*operations/i] },
+    { name: "Provincial Remittance", patterns: [/provincial\s*remittance/i] },
+  ];
+  for (const sec of sectionLabels) {
+    const found = sec.patterns.some(p => findCell(sheet, p));
+    if (!found) {
+      issues.push({
+        kind: "structural",
+        message: `Missing section: "${sec.name}"`,
+        detail: "The current template includes this remittance section.",
+      });
+    }
+  }
+
+  // ---- Formula checks ----
+  // The file's built-in formulas should produce values matching the canonical rules.
+  // We sample a few checkpoints and compare the entered value against what the rule predicts.
+  if (totals && totals.tithe != null && totals.offering != null) {
+    const tol = 0.05; // generous: allows 1-2 cents of rounding
+    const checks = [
+      { label: "Regional 5% of Offering", entered: actualRemittance.regional.offering5, expected: totals.offering * CANONICAL_RULES.regional.offering },
+      { label: "Regional 20% of Tithe",   entered: actualRemittance.regional.tithe20,   expected: totals.tithe    * CANONICAL_RULES.regional.tithe },
+      { label: "Parish Ops 55% of Tithe", entered: actualRemittance.operations.tithe55, expected: totals.tithe    * CANONICAL_RULES.parishOps.tithe },
+      { label: "Parish Ops 95% of Offering", entered: actualRemittance.operations.offering95, expected: totals.offering * CANONICAL_RULES.parishOps.offering },
+      { label: "Parish Ops 30% of T/Giving", entered: actualRemittance.operations.thanksgiving30, expected: (totals.thanksgiving || 0) * CANONICAL_RULES.parishOps.thanksgiving },
+      { label: "Pastor Allow 20% of Tithe", entered: actualRemittance.pastorAllow.tithe20, expected: totals.tithe * CANONICAL_RULES.pastorAllow.tithe },
+      { label: "Pastor Allow 70% of T/Giving", entered: actualRemittance.pastorAllow.thanksgiving70, expected: (totals.thanksgiving || 0) * CANONICAL_RULES.pastorAllow.thanksgiving },
+      { label: "Provincial 5% of Tithe", entered: actualRemittance.provincial.tithe5, expected: totals.tithe * CANONICAL_RULES.provincial.tithe },
+    ];
+    // For each check: if the entered value is non-null and DIVERGES from canonical AND
+    // appears to use a DIFFERENT consistent rate (not just an arithmetic typo), it's a
+    // template formula error. Heuristic: compute the implied rate, see if it's a "round"
+    // percentage other than the canonical one.
+    for (const c of checks) {
+      if (c.entered == null) continue;
+      if (Math.abs(c.entered - c.expected) < tol) continue; // matches canonical, no issue
+      // Compute the implied rate against the source (tithe or offering or tnx).
+      // We need the divisor — use the closest source.
+      let divisor = null;
+      if (/tithe/i.test(c.label)) divisor = totals.tithe;
+      else if (/offering/i.test(c.label)) divisor = totals.offering;
+      else if (/giving/i.test(c.label)) divisor = totals.thanksgiving;
+      if (!divisor) continue;
+      const impliedRate = c.entered / divisor;
+      // "Round" percentages: 0.01, 0.02, ... 0.99. Check if implied rate is within 0.005 of any round %.
+      const nearestRoundPct = Math.round(impliedRate * 100) / 100;
+      const isRoundRate = Math.abs(impliedRate - nearestRoundPct) < 0.005;
+      if (isRoundRate) {
+        issues.push({
+          kind: "formula",
+          message: `${c.label}: file uses ${(nearestRoundPct * 100).toFixed(0)}% instead of canonical ${(c.expected / divisor * 100).toFixed(0)}%`,
+          detail: `Entered ${c.entered.toFixed(2)} ÷ source ${divisor.toFixed(2)} ≈ ${(nearestRoundPct * 100).toFixed(0)}%. The current template uses ${(c.expected / divisor * 100).toFixed(0)}%.`,
+        });
+      }
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    structuralIssues: issues.filter(i => i.kind === "structural"),
+    formulaIssues: issues.filter(i => i.kind === "formula"),
+    issues,
+  };
+}
+
+// Holds the most recently parsed workbook + filename so the auto-fix patch handler
+// can mutate cells and re-download. Reset on every new file load.
+let CURRENT_FILE = { workbook: null, filename: null, sheetName: null };
+
+function parseWorkbook(wb) {
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+
+  // Row 1 fields use valueForHeaderLabel — the value sits BELOW the label
+  // (Mount Zion, New Song, Oct 2025 all use this layout). Falling back to
+  // right-walking would pick up the next label on the same row as the "value".
+  const parish = valueForHeaderLabel(sheet, "Name Of Parish");
+  const pastor = valueForHeaderLabel(sheet, "Pastor In Charge");
+  // Mobile/email use the same below-first lookup, with a whole-sheet pattern scan
+  // as a final fallback (handles templates where the value floats to a different cell).
+  const mobile = valueForHeaderLabel(sheet, "Mobile") || findMobileInSheet(sheet);
+  const email = valueForHeaderLabel(sheet, "Email") || findEmailInSheet(sheet);
+  const monthYear = detectMonthYear(sheet);
+  const totals = readGrandTotalRow(sheet);
+  const avgAttendance = readMonthlyAverageTotal(sheet);
+  const avgDemographics = readMonthlyAverageDemographics(sheet);
+  const actual = readActualRemittance(sheet);
+  const perDate = extractPerDateRows(sheet);
+  const weeklyTotalsRaw = extractWeeklyTotals(sheet);
+  const perDateStats = extractPerDateStatistics(sheet);
+  const enteredStatTotals = readEnteredStatTotals(sheet);
+
+  if (!totals) throw new Error("Could not locate the grand-total row in the report.");
+
+  // For each WEEK block, sum the per-date money rows that fall between this block's header
+  // and its "Total" row. Compares to the entered weekly total (e.g., L12, L20, L28, ...).
+  const weeklyTotals = weeklyTotalsRaw.map((wt) => {
+    const rowsInWeek = perDate.filter(d => d.row > wt.headerRow && d.row < wt.totalRow);
+    const recomputed = round2(rowsInWeek.reduce((acc, d) => acc + d.money.totalCalculated, 0));
+    return {
+      weekIndex: wt.weekIndex,
+      enteredTotal: wt.enteredTotal,
+      recomputedTotal: recomputed,
+      contributingRows: rowsInWeek.length,
+      validated: wt.enteredTotal != null ? Math.abs(wt.enteredTotal - recomputed) < 0.01 : null,
+    };
+  });
+
+  const offering = totals.offering ?? 0;
+  const tithe = totals.tithe ?? 0;
+  const thanksgiving = totals.thanksgiving ?? 0;
+  const others = totals.others ?? 0;
+
+  // Calculations
+  const calc = {
+    regional: {
+      offering5: round2(offering * 0.05),
+      tithe20: round2(tithe * 0.20),
+      total: round2(offering * 0.05 + tithe * 0.20),
+    },
+    operations: {
+      tithe55: round2(tithe * 0.55),
+      offering95: round2(offering * 0.95),
+      thanksgiving30: round2(thanksgiving * 0.30),
+      total: round2(tithe * 0.55 + offering * 0.95 + thanksgiving * 0.30),
+    },
+    pastorAllow: {
+      tithe20: round2(tithe * 0.20),
+      thanksgiving70: round2(thanksgiving * 0.70),
+      total: round2(tithe * 0.20 + thanksgiving * 0.70),
+    },
+    provincial: {
+      tithe5: round2(tithe * 0.05),
+    },
+  };
+
+  // ---- Re-sum every per-date row to validate Row 2 (monthly totals) ----
+  const reSum = perDate.reduce(
+    (acc, r) => ({
+      offering: acc.offering + r.money.offering,
+      tithe: acc.tithe + r.money.tithe,
+      thanksgiving: acc.thanksgiving + r.money.thanksgiving,
+      others: acc.others + r.money.others,
+      menSum: acc.menSum + r.attendance.men,
+      womenSum: acc.womenSum + r.attendance.women,
+      childrenSum: acc.childrenSum + r.attendance.children,
+      menWomenChildrenSum: acc.menWomenChildrenSum + (r.attendance.totalCalculated || 0),
+      attendanceWeeks: acc.attendanceWeeks + (r.hasAttendance ? 1 : 0),
+    }),
+    { offering: 0, tithe: 0, thanksgiving: 0, others: 0, menSum: 0, womenSum: 0, childrenSum: 0, menWomenChildrenSum: 0, attendanceWeeks: 0 }
+  );
+  reSum.offering = round2(reSum.offering);
+  reSum.tithe = round2(reSum.tithe);
+  reSum.thanksgiving = round2(reSum.thanksgiving);
+  reSum.others = round2(reSum.others);
+  reSum.sum = round2(reSum.offering + reSum.tithe + reSum.thanksgiving + reSum.others);
+  // Use TOTAL number of dated rows (not just non-zero attendance weeks) as the divisor —
+  // this matches what the file's "Monthly Average" row does in the Mount Zion template.
+  const datedWeekCount = perDate.filter(d => d.date).length;
+  const datedDiv = datedWeekCount || 1;
+  // Compute averages at FULL precision so comparison against the file's values isn't
+  // sabotaged by rounding (e.g., file=63.75 vs Math.round(63.75*10)/10=63.8 in JS engines
+  // that round half-to-even). Display rounding happens at render time, not here.
+  reSum.averageAttendanceCalculated = datedWeekCount > 0
+    ? reSum.menWomenChildrenSum / datedWeekCount
+    : 0;
+  reSum.averageMenCalculated = reSum.menSum / datedDiv;
+  reSum.averageWomenCalculated = reSum.womenSum / datedDiv;
+  reSum.averageChildrenCalculated = reSum.childrenSum / datedDiv;
+
+  // ---- Allocation reconciliation: every euro must be allocated exactly once ----
+  // Sum of entered remittances must equal Total Offering + Tithe + Thanksgiving + Others.
+  const enteredAllocations = (
+    NUM(actual.regional.offering5) +
+    NUM(actual.regional.tithe20) +
+    NUM(actual.operations.tithe55) +
+    NUM(actual.operations.offering95) +
+    NUM(actual.operations.thanksgiving30) +
+    NUM(actual.pastorAllow.tithe20) +
+    NUM(actual.pastorAllow.thanksgiving70) +
+    NUM(actual.provincial.tithe5)
+  );
+  const totalIncome = offering + tithe + thanksgiving + others;
+  // Note: "Others" has no allocation rule, so the expected reconciled sum excludes it.
+  const expectedAllocations = round2(totalIncome - others);
+  const allocationReconciliation = {
+    totalIncome: round2(totalIncome),
+    others,
+    expectedAllocations,
+    enteredAllocations: round2(enteredAllocations),
+    delta: round2(enteredAllocations - expectedAllocations),
+    validated: Math.abs(enteredAllocations - expectedAllocations) < 0.01,
+  };
+
+  const monthlyValidation = {
+    offering: { reported: offering, recomputed: reSum.offering, validated: Math.abs(offering - reSum.offering) < 0.01 },
+    tithe: { reported: tithe, recomputed: reSum.tithe, validated: Math.abs(tithe - reSum.tithe) < 0.01 },
+    thanksgiving: { reported: thanksgiving, recomputed: reSum.thanksgiving, validated: Math.abs(thanksgiving - reSum.thanksgiving) < 0.01 },
+    others: { reported: others, recomputed: reSum.others, validated: Math.abs(others - reSum.others) < 0.01 },
+    sum: { reported: round2(offering + tithe + thanksgiving + others), recomputed: reSum.sum, validated: Math.abs(round2(offering + tithe + thanksgiving + others) - reSum.sum) < 0.01 },
+    // Tolerance is generous (0.05) because parishes round to varying precision.
+    // The file's printed value (e.g., 63.75 or 17.4) is the ground truth; we just
+    // need to be robust to "70.5 vs 70.50000001" floating-point noise.
+    averageAttendance: avgAttendance != null
+      ? { reported: NUM(avgAttendance), recomputed: reSum.averageAttendanceCalculated, validated: Math.abs(NUM(avgAttendance) - reSum.averageAttendanceCalculated) < 0.05 }
+      : { reported: null, recomputed: reSum.averageAttendanceCalculated, validated: null },
+    averageMen: avgDemographics.men != null
+      ? { reported: avgDemographics.men, recomputed: reSum.averageMenCalculated, validated: Math.abs(avgDemographics.men - reSum.averageMenCalculated) < 0.05 }
+      : { reported: null, recomputed: reSum.averageMenCalculated, validated: null },
+    averageWomen: avgDemographics.women != null
+      ? { reported: avgDemographics.women, recomputed: reSum.averageWomenCalculated, validated: Math.abs(avgDemographics.women - reSum.averageWomenCalculated) < 0.05 }
+      : { reported: null, recomputed: reSum.averageWomenCalculated, validated: null },
+    averageChildren: avgDemographics.children != null
+      ? { reported: avgDemographics.children, recomputed: reSum.averageChildrenCalculated, validated: Math.abs(avgDemographics.children - reSum.averageChildrenCalculated) < 0.05 }
+      : { reported: null, recomputed: reSum.averageChildrenCalculated, validated: null },
+  };
+
+  // ---- Sanity checks ----
+  // Returns an array of { id, label, level: "ok"|"warn"|"fail", detail }.
+  const sanityChecks = (function () {
+    const out = [];
+
+    // Negatives in any monetary or attendance value across per-date rows.
+    const negatives = [];
+    for (const d of perDate) {
+      ["men", "women", "children"].forEach(k => { if (d.attendance[k] < 0) negatives.push(`${d.date || `row ${d.row}`} attendance.${k}=${d.attendance[k]}`); });
+      ["offering", "tithe", "thanksgiving", "others"].forEach(k => { if (d.money[k] < 0) negatives.push(`${d.date || `row ${d.row}`} money.${k}=${d.money[k]}`); });
+    }
+    out.push(negatives.length === 0
+      ? { id: "no-negatives", label: "No negative values", level: "ok", detail: null }
+      : { id: "no-negatives", label: "Negative values present", level: "fail", detail: negatives.join("; ") });
+
+    // Missing required Row 1 fields.
+    const missingFields = [];
+    if (!parish) missingFields.push("Name Of Parish");
+    if (!pastor) missingFields.push("Pastor In Charge");
+    if (monthYear.month == null) missingFields.push("Report month (no Sunday dates found)");
+    out.push(missingFields.length === 0
+      ? { id: "row1-complete", label: "Row 1 (Parish/Pastor/Month) complete", level: "ok", detail: null }
+      : { id: "row1-complete", label: "Row 1 fields missing", level: "fail", detail: missingFields.join(", ") });
+
+    // Sundays consecutive (7 days apart) and all in the same month as the detected report month.
+    const sundayRows = perDate
+      .filter(d => d.date && (d.day || "").toLowerCase() === "sunday")
+      .map(d => ({ row: d.row, date: new Date(d.date + "T00:00:00") }))
+      .sort((a, b) => a.date - b.date);
+
+    if (sundayRows.length >= 2) {
+      const gaps = [];
+      for (let i = 1; i < sundayRows.length; i++) {
+        const dayDiff = (sundayRows[i].date - sundayRows[i - 1].date) / 86400000;
+        if (dayDiff !== 7) gaps.push(`${ymd(sundayRows[i - 1].date)} → ${ymd(sundayRows[i].date)} (${dayDiff}d)`);
+      }
+      out.push(gaps.length === 0
+        ? { id: "sundays-consecutive", label: "All Sundays are consecutive (7 days apart)", level: "ok", detail: null }
+        : { id: "sundays-consecutive", label: "Non-consecutive Sundays detected", level: "warn", detail: gaps.join("; ") });
+    }
+
+    // All Sunday dates in the detected report month.
+    if (monthYear.month != null && sundayRows.length > 0) {
+      const wrong = sundayRows.filter(s => s.date.getMonth() !== monthYear.month || s.date.getFullYear() !== monthYear.year);
+      out.push(wrong.length === 0
+        ? { id: "dates-in-month", label: `All Sundays fall in ${monthYear.label}`, level: "ok", detail: null }
+        : { id: "dates-in-month", label: `Sundays outside ${monthYear.label}`, level: "warn", detail: wrong.map(s => ymd(s.date)).join(", ") });
+    }
+
+    // No fully-empty Sunday rows. We only flag empty Sundays that ALSO have a date entered —
+    // an undated empty Sunday row is the optional WEEK 5 placeholder that's normal in months
+    // with only 4 Sundays. Flagging it would cry wolf every October/February/etc.
+    const emptySundays = perDate.filter(d =>
+      (d.day || "").toLowerCase() === "sunday" && !d.hasAttendance && !d.hasMoney && d.date
+    );
+    if (emptySundays.length > 0) {
+      out.push({
+        id: "no-empty-sundays",
+        label: "Some dated Sundays have no values entered",
+        level: "warn",
+        detail: emptySundays.map(d => d.date).join(", "),
+      });
+    } else {
+      out.push({ id: "no-empty-sundays", label: "Every dated Sunday has values entered", level: "ok", detail: null });
+    }
+
+    return out;
+  })();
+
+  return {
+    source: { sheet: sheetName, parish, pastor, mobile, email, reportMonth: monthYear.label, monthIndex: monthYear.month, year: monthYear.year },
+    parishRecords: {
+      averageAttendance: avgAttendance,
+      totalOffering: offering,
+      totalTithe: tithe,
+      totalThanksgiving: thanksgiving,
+      totalOthers: others,
+      sum: round2(offering + tithe + thanksgiving + others),
+    },
+    perDate,
+    monthlyValidation,
+    weeklyTotals,
+    allocationReconciliation,
+    sanityChecks,
+    templateValidity: detectTemplateValidity(sheet, { tithe, offering, thanksgiving, others }, actual),
+    statistics: (function () {
+      // Per-stat-column re-sum vs entered total in row 48.
+      const validation = STAT_FIELDS.map(f => {
+        const recomputed = perDateStats.reduce((a, r) => a + (r.stats[f.key] || 0), 0);
+        const reported = enteredStatTotals ? enteredStatTotals.totals[f.key] : null;
+        const cellAddress = enteredStatTotals ? enteredStatTotals.addresses[f.key] : null;
+        return {
+          key: f.key,
+          label: f.label,
+          reported,
+          recomputed,
+          cellAddress,                  // e.g., "P48" — needed for auto-fix
+          validated: reported != null ? Math.abs(reported - recomputed) < 0.01 : null,
+          hasAnyValue: recomputed > 0 || (reported != null && reported > 0),
+        };
+      });
+      return { perDate: perDateStats, validation };
+    })(),
+    regionalRemittance: { calculated: calc.regional, actual: actual.regional },
+    parishOperations: { calculated: calc.operations, actual: actual.operations },
+    parishPastorAllowance: { calculated: calc.pastorAllow, actual: actual.pastorAllow },
+    provincialRemittance: { calculated: calc.provincial, actual: actual.provincial },
+    others: { totalOthers: others, allocationRule: null },
+    coverage: {
+      offering: { rules: "5% Regional + 95% Parish Ops", coveragePct: 100 },
+      tithe: { rules: "20% Regional + 55% Parish Ops + 20% Pastor + 5% Provincial", coveragePct: 100 },
+      thanksgiving: { rules: "30% Parish Ops + 70% Pastor", coveragePct: 100 },
+      others: { rules: "no allocation rule defined", coveragePct: 0 },
+    },
+  };
+}
+
+// ============================================================
+//  RENDERING
+// ============================================================
+
+const $ = (sel) => document.querySelector(sel);
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const fmtInt = (n) => (n == null ? "—" : Number(n).toLocaleString());
+// Count formatter: ALWAYS rounds to whole numbers. Used for headcount fields
+// (Converts, Births, Workers, Attendance, etc.) where decimals are nonsensical.
+// 5.0 → 5, 5.49 → 5, 5.5 → 6.
+const fmtCount = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString());
+
+// Pick the right formatter for a given check object. Section is the primary
+// signal — labels can contain ambiguous words like "sum" (as in "per-date sum")
+// that would otherwise be misclassified as monetary. Single source of truth so
+// every callsite formats consistently.
+function formatterForCheck(check) {
+  const section = (check.section || "").toLowerCase();
+  const label = (check.label || "").toLowerCase();
+  // Non-monetary sections — counts (always integer)
+  if (section === "statistics") return fmtCount;
+  if (section === "per-date attendance") return fmtCount;
+  // Averages — keep decimals
+  if (/average|avg/.test(label)) return fmtSmart;
+  // Monetary sections
+  if (/^(parish operations|regional remittance|pastor allowance|provincial remittance|allocation reconciliation|weekly totals|per-date money|parish records)$/i.test(section)) return fmt;
+  // Default: monetary
+  return fmt;
+}
+// Smart formatter: shows integers without trailing zeros (5 instead of 5.00),
+// keeps non-integers with up to 2 decimals (5.5, 17.4). Used in user-facing
+// explanations where money/count distinction matters AND the value may be a true average.
+const fmtSmart = (n) => {
+  if (n == null) return "—";
+  const num = Number(n);
+  if (!isFinite(num)) return String(n);
+  return Number.isInteger(num)
+    ? num.toLocaleString()
+    : num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+function flagCell(calc, actual) {
+  if (actual == null) return `<td class="flag"><span class="bad-pill">missing</span></td>`;
+  const diff = Math.abs(calc - actual);
+  const ok = diff < 0.01;
+  return `<td class="flag"><span class="${ok ? "pos" : "neg"}">${ok ? icon("check-circle-2") : icon("x-circle") + " Not validated"}</span></td>`;
+}
+
+function row(label, calc, actual) {
+  return `<tr>
+    <td>${label}</td>
+    <td class="num">${fmt(calc)}</td>
+    <td class="num">${fmt(actual)}</td>
+    ${flagCell(calc, actual)}
+  </tr>`;
+}
+
+// Row used for the new Row-2 monthly-validation table: Reported vs Re-summed.
+// `kind` controls formatting: "money" = 2 decimals, "avg" = up to 2 decimals (no trailing zero).
+function monthlyRow(label, v, kind = "money") {
+  const fmtVal = (n) => {
+    if (n == null) return "—";
+    if (kind === "avg") {
+      // Show what the file shows: 160.25, 70.5, 26, 17.4, etc. (no forced trailing zeros)
+      const rounded = Math.round(Number(n) * 100) / 100;
+      return rounded.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+    return fmt(n);
+  };
+  if (v.reported == null) {
+    return `<tr>
+      <td>${label}</td>
+      <td class="num">—</td>
+      <td class="num">${fmtVal(v.recomputed)}</td>
+      <td class="flag"><span class="bad-pill">no reported value</span></td>
+    </tr>`;
+  }
+  const ok = v.validated;
+  return `<tr>
+    <td>${label}</td>
+    <td class="num">${fmtVal(v.reported)}</td>
+    <td class="num">${fmtVal(v.recomputed)}</td>
+    <td class="flag"><span class="${ok ? "pos" : "neg"}">${ok ? icon("check-circle-2") : icon("x-circle") + " Not validated"}</span></td>
+  </tr>`;
+}
+
+// Inline ✓/✗ used in the Per-Date Detail table.
+function perDateFlag(validated, hasValues) {
+  if (validated == null) return hasValues ? "—" : "";
+  return validated
+    ? `<span class="pos" title="Validated">${icon("check-circle-2")}</span>`
+    : `<span class="neg" title="Not validated">${icon("x-circle")}</span>`;
+}
+
+// ---- Helpers for "float failed sections to top" ----
+// Each section reports whether it currently has issues. The renderOrderedSections()
+// helper takes a list of {id, html, hasErrors} and emits the failing ones first,
+// followed by the clean ones in their natural order.
+function hasSanityErrors(checks) {
+  return checks.some(c => c.level === "fail" || c.level === "warn");
+}
+function hasWeeklyTotalsErrors(weeklyTotals) {
+  return weeklyTotals.some(w => w.validated === false);
+}
+function hasPerDateErrors(perDate) {
+  return perDate.some(d => d.attendance.validated === false || d.money.validated === false);
+}
+function hasStatisticsErrors(stats) {
+  if (!stats || !stats.validation) return false;
+  return stats.validation.some(s => s.validated === false);
+}
+function hasBuildUpErrors(monthlyValidation) {
+  const entries = [
+    monthlyValidation.averageAttendance,
+    monthlyValidation.offering,
+    monthlyValidation.tithe,
+    monthlyValidation.thanksgiving,
+    monthlyValidation.others,
+  ];
+  return entries.some(v => v && v.reported != null && !v.validated);
+}
+// Take a list of {id, html, hasErrors} and emit failing sections first.
+// Within each group (failing/clean) the natural input order is preserved (stable sort).
+function renderOrderedSections(sections) {
+  const failing = sections.filter(s => s.hasErrors);
+  const clean = sections.filter(s => !s.hasErrors);
+  return [...failing, ...clean].map(s => s.html).join("\n");
+}
+
+function renderSanity(checks) {
+  const counts = checks.reduce((a, c) => { a[c.level] = (a[c.level] || 0) + 1; return a; }, {});
+  const badgeCls = counts.fail ? "bad" : counts.warn ? "warn" : "good";
+  const badgeText = `${counts.ok || 0} ok · ${counts.warn || 0} warn · ${counts.fail || 0} fail`;
+  const hasErr = !!(counts.fail || counts.warn);
+  return `
+    <details class="section" data-section-id="sanity" data-has-errors="${hasErr}" ${hasErr ? "open" : ""}>
+      <summary>Sanity Checks <span class="badge ${badgeCls}">${badgeText}</span></summary>
+      <div class="body">
+        <div class="sanity">
+          ${checks.map(c => `
+            <div class="item ${c.level}">
+              <span class="icon">${c.level === "ok" ? icon("check-circle-2") : c.level === "warn" ? icon("alert-triangle") : icon("x-circle")}</span>
+              <div>
+                <div>${c.label}</div>
+                ${c.detail ? `<div class="detail">${escapeHtml(c.detail)}</div>` : ""}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </details>`;
+}
+
+function renderWeeklyTotals(weeklyTotals) {
+  if (!weeklyTotals.length) return "";
+  const allOk = weeklyTotals.every(w => w.validated);
+  const badge = allOk ? `<span class="badge good">${weeklyTotals.length} validated</span>` : `<span class="badge bad">${weeklyTotals.filter(w => !w.validated).length} failed</span>`;
+  return `
+    <details class="section" data-section-id="weekly-totals" data-has-errors="${!allOk}" ${allOk ? "" : "open"}>
+      <summary>Weekly Totals (re-summed from per-date) ${badge}</summary>
+      <div class="body">
+        <table>
+          <thead><tr><th>Week</th><th class="num">Entered € Total</th><th class="num">Re-summed</th><th class="num">Δ</th><th class="flag">Match</th></tr></thead>
+          ${weeklyTotals.map(w => {
+            const ok = w.validated;
+            const delta = w.enteredTotal != null ? Math.abs(w.enteredTotal - w.recomputedTotal) : 0;
+            return `<tr>
+              <td>WEEK ${w.weekIndex}</td>
+              <td class="num">${w.enteredTotal != null ? fmt(w.enteredTotal) : "—"}</td>
+              <td class="num">${fmt(w.recomputedTotal)}</td>
+              <td class="num">${fmt(delta)}</td>
+              <td class="flag">${ok == null ? `<span class="bad-pill">no entered</span>` : `<span class="${ok ? "pos" : "neg"}">${ok ? icon("check-circle-2") : icon("x-circle") + " Not validated"}</span>`}</td>
+            </tr>`;
+          }).join("")}
+        </table>
+      </div>
+    </details>`;
+}
+
+function renderAllocationReconciliation(a) {
+  const ok = a.validated;
+  const badge = ok ? `<span class="badge good">balances</span>` : `<span class="badge bad">Δ ${fmt(Math.abs(a.delta))}</span>`;
+  return `
+    <details class="section" data-section-id="allocation" data-has-errors="${!ok}" ${ok ? "" : "open"}>
+      <summary>Allocation Reconciliation ${badge}</summary>
+      <div class="body">
+        <table>
+          <tr><td>Total monetary income (Offering + Tithe + Tnx + Others)</td><td class="num">${fmt(a.totalIncome)}</td></tr>
+          <tr><td>Others (no allocation rule defined)</td><td class="num muted">${fmt(a.others)}</td></tr>
+          <tr><td><strong>Expected allocations</strong> (Total − Others)</td><td class="num"><strong>${fmt(a.expectedAllocations)}</strong></td></tr>
+          <tr><td>Sum of all entered remittances</td><td class="num">${fmt(a.enteredAllocations)}</td></tr>
+          <tr><td>Δ (entered − expected)</td><td class="num ${Math.abs(a.delta) < 0.01 ? "" : "neg"}">${fmt(a.delta)}</td></tr>
+          <tr><td>Match</td><td class="flag"><span class="${ok ? "pos" : "neg"}">${ok ? icon("check-circle-2") : icon("x-circle") + " Not validated"}</span></td></tr>
+        </table>
+        <div class="meta" style="margin-top:6px">Verifies that all monetary income (excluding Others) has been allocated to exactly one of: Regional · Parish Ops · Pastor · Provincial.</div>
+      </div>
+    </details>`;
+}
+
+function renderStatistics(stats) {
+  const v = stats.validation;
+  // Adaptive: only show stat columns that have ANY value across the month.
+  const visible = v.filter(s => s.hasAnyValue);
+  if (visible.length === 0) {
+    return `
+      <details class="section" data-section-id="statistics" data-has-errors="false">
+        <summary>Statistics (Births, Marriages, etc.) <span class="badge">all zero</span></summary>
+        <div class="body">
+          <div class="meta">No statistics columns had any non-zero values this month.</div>
+        </div>
+      </details>`;
+  }
+  const allOk = visible.every(s => s.validated !== false);
+  const badge = allOk ? `<span class="badge good">${visible.length} validated</span>` : `<span class="badge bad">${visible.filter(s => s.validated === false).length} failed</span>`;
+  return `
+    <details class="section" data-section-id="statistics" data-has-errors="${!allOk}" ${allOk ? "" : "open"}>
+      <summary>Statistics ${badge}</summary>
+      <div class="body">
+        <table>
+          <thead><tr><th>Field</th><th class="num">Per-date sum</th><th class="num">Reported total</th><th class="flag">Match</th></tr></thead>
+          ${visible.map(s => `
+            <tr>
+              <td>${s.label}</td>
+              <td class="num">${fmtCount(s.recomputed)}</td>
+              <td class="num">${s.reported != null ? fmtCount(s.reported) : "—"}</td>
+              <td class="flag">${s.validated == null ? `<span class="bad-pill">no reported</span>` : `<span class="${s.validated ? "pos" : "neg"}">${s.validated ? icon("check-circle-2") : icon("x-circle") + " Not validated"}</span>`}</td>
+            </tr>
+          `).join("")}
+        </table>
+        <div class="meta" style="margin-top:6px">Columns with all-zero values across the month are hidden.</div>
+      </div>
+    </details>`;
+}
+
+// Render the "Row 2 — Build-Up" section: five formula lines that show how each
+// monthly figure was assembled from the per-date data (weeks with zero faded).
+function renderBuildUp(perDate, monthlyValidation) {
+  // Only Sunday/dated rows count as "weeks" for the divisor and components.
+  const weekRows = perDate.filter(d => d.date); // rows with a real date
+  if (weekRows.length === 0) {
+    return `<h2>Row 2 — Build-Up</h2><div class="buildup"><div class="formula muted">No per-date rows available to derive Row 2 from.</div></div>`;
+  }
+
+  // Renders a number with the right CSS class so zeros fade out automatically.
+  const term = (n, label, isInt = false) => {
+    const isZero = !n;
+    const display = isInt ? fmtInt(n) : fmt(n);
+    return `<span class="${isZero ? "zero" : ""}">${display}<span class="label">${label}</span></span>`;
+  };
+
+  const op = (sym) => `<span class="op">${sym}</span>`;
+
+  // Build a "+ + + + +" formula across all weeks for one money column.
+  const moneyFormula = (key, isInt = false) => {
+    const parts = weekRows.map((d, i) => term(d.money[key], `W${i + 1}`, isInt));
+    const total = round2(weekRows.reduce((a, d) => a + d.money[key], 0));
+    return `${parts.join(op("+"))} ${op("=")} <span class="result">${isInt ? fmtInt(total) : fmt(total)}</span>`;
+  };
+
+  // Per-week attendance subtotals: (M+W+C) per week, divided by week count.
+  const attendanceFormula = () => {
+    const subtotals = weekRows.map(d => d.attendance.totalCalculated);
+    const sum = subtotals.reduce((a, b) => a + b, 0);
+    const divisor = weekRows.length;
+    const avg = divisor > 0 ? Math.round(sum / divisor) : 0;
+    const partsHtml = subtotals.map((s, i) => term(s, `W${i + 1}`, true)).join(op("+"));
+    return `(${partsHtml}) ${op("÷")} ${divisor} ${op("=")} ${fmtInt(sum)} ${op("÷")} ${divisor} ${op("=")} <span class="result">${fmtInt(avg)}</span>`;
+  };
+
+  const card = (label, formulaHtml, validation, isInt = false) => {
+    const reported = validation.reported;
+    const recomputed = validation.recomputed;
+    const ok = validation.validated;
+    const matchHtml = reported == null
+      ? `<span class="bad-pill">no reported value to compare</span>`
+      : ok
+        ? `<span class="pos">✓ matches reported ${isInt ? fmtInt(reported) : fmt(reported)}</span>`
+        : `<span class="neg">✗ reported ${isInt ? fmtInt(reported) : fmt(reported)} (Δ ${fmt(Math.abs(reported - recomputed))})</span>`;
+    return `
+      <div class="buildup">
+        <div class="field">${label}</div>
+        <div class="formula">${formulaHtml}</div>
+        <div class="meta" style="margin-top:6px">${matchHtml}</div>
+      </div>`;
+  };
+
+  // Tally how many of the 5 build-up entries match their reported value, used for
+  // the section badge and to auto-open the section when any are off.
+  const buildUpEntries = [
+    monthlyValidation.averageAttendance,
+    monthlyValidation.offering,
+    monthlyValidation.tithe,
+    monthlyValidation.thanksgiving,
+    monthlyValidation.others,
+  ];
+  const failedCount = buildUpEntries.filter(v => v && v.reported != null && !v.validated).length;
+  const allOk = failedCount === 0;
+  const badge = allOk
+    ? `<span class="badge good">${buildUpEntries.length} validated</span>`
+    : `<span class="badge bad">${failedCount} failed</span>`;
+
+  return `
+    <details class="section" data-section-id="buildup" data-has-errors="${!allOk}" ${allOk ? "" : "open"}>
+      <summary>Row 2 — Build-Up <span class="badge">how each figure was assembled</span> ${badge}</summary>
+      <div class="body">
+        ${card("Monthly Average Attendance", attendanceFormula(), monthlyValidation.averageAttendance, true)}
+        ${card("Total Offering", moneyFormula("offering"), monthlyValidation.offering)}
+        ${card("Total Tithe", moneyFormula("tithe"), monthlyValidation.tithe)}
+        ${card("Total Thanksgiving", moneyFormula("thanksgiving"), monthlyValidation.thanksgiving)}
+        ${card("Total Others", moneyFormula("others"), monthlyValidation.others)}
+      </div>
+    </details>
+  `;
+}
+
+// Cleaner Per-Date Detail: hide all-zero rows (typically blank midweek entries),
+// drop empty cells (— instead of "0"), and surface a tidy "X hidden" footer.
+function renderPerDateDetail(perDate) {
+  const visible = perDate.filter(d => d.hasAttendance || d.hasMoney);
+  const hidden = perDate.length - visible.length;
+
+  // Only show columns that have at least one non-zero value across the visible rows.
+  const showAttendance = visible.some(d => d.hasAttendance);
+  const showMoney = visible.some(d => d.hasMoney);
+
+  if (visible.length === 0) {
+    return `<h2>Per-Date Detail</h2>
+      <table><tr><td>No dated rows with values were found.</td></tr></table>`;
+  }
+
+  const cell = (n, isInt = false) => n === 0 || n == null
+    ? `<td class="num muted">—</td>`
+    : `<td class="num">${isInt ? fmtInt(n) : fmt(n)}</td>`;
+
+  const header = `
+    <tr>
+      <th>Date</th>
+      <th>Day</th>
+      ${showAttendance ? `<th class="num">Men</th><th class="num">Women</th><th class="num">Children</th><th class="num">Att.</th><th class="flag">Match</th>` : ""}
+      ${showMoney ? `<th class="num">Offering</th><th class="num">Tithe</th><th class="num">Tnx</th><th class="num">Others</th><th class="num">€ Total</th><th class="flag">Match</th>` : ""}
+    </tr>`;
+
+  const body = visible.map(d => `
+    <tr>
+      <td>${d.date || "—"}</td>
+      <td>${d.day || "—"}</td>
+      ${showAttendance ? `
+        ${cell(d.attendance.men, true)}
+        ${cell(d.attendance.women, true)}
+        ${cell(d.attendance.children, true)}
+        ${d.attendance.totalReported != null && d.hasAttendance ? `<td class="num">${fmtInt(d.attendance.totalReported)}</td>` : `<td class="num muted">—</td>`}
+        <td class="flag">${perDateFlag(d.attendance.validated, d.hasAttendance)}</td>
+      ` : ""}
+      ${showMoney ? `
+        ${cell(d.money.offering)}
+        ${cell(d.money.tithe)}
+        ${cell(d.money.thanksgiving)}
+        ${cell(d.money.others)}
+        ${d.money.totalReported != null && d.hasMoney ? `<td class="num">${fmt(d.money.totalReported)}</td>` : `<td class="num muted">—</td>`}
+        <td class="flag">${perDateFlag(d.money.validated, d.hasMoney)}</td>
+      ` : ""}
+    </tr>
+  `).join("");
+
+  const footer = hidden > 0
+    ? `<div class="meta">${hidden} empty midweek row${hidden === 1 ? "" : "s"} hidden.</div>`
+    : "";
+
+  return `
+    <h2>Per-Date Detail (${visible.length} ${visible.length === 1 ? "row" : "rows"})</h2>
+    <table>
+      <thead>${header}</thead>
+      ${body}
+    </table>
+    ${footer}`;
+}
+
+// Build the full list of comparisons so the summary can grade everything in one place.
+// `tol` overrides the default 0.01 epsilon used by gradeChecks (e.g., averages tolerate 0.05).
+function buildChecks(r) {
+  const mk = (section, label, calc, actual, tol) => ({ section, label, calc, actual, tol });
+  const AVG_TOL = 0.05; // matches the field-level tolerance for averages
+  const checks = [
+    // Row 2 — monthly totals re-summed from per-date data
+    mk("Parish Records", "Total Offering (re-summed from per-date)", r.monthlyValidation.offering.recomputed, r.monthlyValidation.offering.reported),
+    mk("Parish Records", "Total Tithe (re-summed from per-date)", r.monthlyValidation.tithe.recomputed, r.monthlyValidation.tithe.reported),
+    mk("Parish Records", "Total Thanksgiving (re-summed from per-date)", r.monthlyValidation.thanksgiving.recomputed, r.monthlyValidation.thanksgiving.reported),
+    mk("Parish Records", "Total Others (re-summed from per-date)", r.monthlyValidation.others.recomputed, r.monthlyValidation.others.reported),
+    mk("Parish Records", "Sum (re-summed from per-date)", r.monthlyValidation.sum.recomputed, r.monthlyValidation.sum.reported),
+  ];
+  if (r.monthlyValidation.averageAttendance.reported != null) {
+    checks.push(mk("Parish Records", "Average Attendance (re-derived from per-date)", r.monthlyValidation.averageAttendance.recomputed, r.monthlyValidation.averageAttendance.reported, AVG_TOL));
+  }
+  // Per-demographic averages
+  for (const k of ["averageMen", "averageWomen", "averageChildren"]) {
+    const v = r.monthlyValidation[k];
+    if (v.reported != null) {
+      checks.push(mk("Parish Records", `${k.replace("average", "Average ")} (re-derived from per-date)`, v.recomputed, v.reported, AVG_TOL));
+    }
+  }
+  // Per-WEEK money totals
+  for (const wt of r.weeklyTotals) {
+    if (wt.enteredTotal != null) {
+      checks.push(mk("Weekly Totals", `WEEK ${wt.weekIndex} € Total`, wt.recomputedTotal, wt.enteredTotal));
+    }
+  }
+  // Allocation reconciliation
+  checks.push(mk("Allocation Reconciliation", "Sum of all entered remittances = Total income (excl. Others)",
+    r.allocationReconciliation.expectedAllocations, r.allocationReconciliation.enteredAllocations));
+  // Statistics columns (only those with reported values or recomputed > 0)
+  for (const s of r.statistics.validation) {
+    if (s.reported != null) {
+      checks.push(mk("Statistics", `${s.label} (per-date sum vs Total row)`, s.recomputed, s.reported));
+    }
+  }
+  // Per-date row arithmetic (each dated row): attendance and money internal sums
+  for (const d of r.perDate) {
+    const tag = `${d.date || `(no date, row ${d.row})`} ${d.day || ""}`.trim();
+    if (d.attendance.totalReported != null && d.hasAttendance) {
+      checks.push(mk("Per-Date Attendance", `${tag} — Men+Women+Children = Total`, d.attendance.totalCalculated, d.attendance.totalReported));
+    }
+    if (d.money.totalReported != null && d.hasMoney) {
+      checks.push(mk("Per-Date Money", `${tag} — Offering+Tithe+Tnx+Others = Total (€)`, d.money.totalCalculated, d.money.totalReported));
+    }
+  }
+  // Remittance allocation rules (existing)
+  checks.push(
+    mk("Regional Remittance", "5% of Total Offering", r.regionalRemittance.calculated.offering5, r.regionalRemittance.actual.offering5),
+    mk("Regional Remittance", "20% of Total Tithe", r.regionalRemittance.calculated.tithe20, r.regionalRemittance.actual.tithe20),
+    mk("Regional Remittance", "Total Regional Remittance", r.regionalRemittance.calculated.total, r.regionalRemittance.actual.total),
+    mk("Parish Operations", "55% of Total Tithe", r.parishOperations.calculated.tithe55, r.parishOperations.actual.tithe55),
+    mk("Parish Operations", "95% of Total Offering", r.parishOperations.calculated.offering95, r.parishOperations.actual.offering95),
+    mk("Parish Operations", "30% of Total Thanksgiving", r.parishOperations.calculated.thanksgiving30, r.parishOperations.actual.thanksgiving30),
+    mk("Parish Operations", "Total Parish Operations", r.parishOperations.calculated.total, r.parishOperations.actual.total),
+    mk("Pastor Allowance", "20% of Total Tithe", r.parishPastorAllowance.calculated.tithe20, r.parishPastorAllowance.actual.tithe20),
+    mk("Pastor Allowance", "70% of Total Thanksgiving", r.parishPastorAllowance.calculated.thanksgiving70, r.parishPastorAllowance.actual.thanksgiving70),
+    mk("Pastor Allowance", "Total Pastor Allowance", r.parishPastorAllowance.calculated.total, r.parishPastorAllowance.actual.total),
+    mk("Provincial Remittance", "5% of Total Tithe", r.provincialRemittance.calculated.tithe5, r.provincialRemittance.actual.tithe5),
+  );
+  return checks;
+}
+
+function gradeChecks(checks) {
+  const validated = [], notValidated = [], missing = [];
+  for (const c of checks) {
+    if (c.actual == null) { missing.push(c); continue; }
+    const tol = c.tol ?? 0.01;
+    if (Math.abs(c.calc - c.actual) < tol) validated.push(c);
+    else notValidated.push(c);
+  }
+  return { validated, notValidated, missing, total: checks.length };
+}
+
+// Parse a formula-issue message like
+//   "Parish Ops 55% of Tithe: file uses 60% instead of canonical 55%"
+// into structured pieces so we can render rate badges instead of raw text.
+function parseFormulaIssue(issue) {
+  const m = (issue.message || "").match(/^(.+?):\s*file uses (\d+)%\s*instead of canonical (\d+)%$/i);
+  if (!m) return { rule: issue.message, fileRate: null, canonicalRate: null, detail: issue.detail };
+  return { rule: m[1].trim(), fileRate: Number(m[2]), canonicalRate: Number(m[3]), detail: issue.detail };
+}
+
+// Render ONE warning variant. Used three times for the comparison view.
+function renderTemplateWarningVariant(t, variant, label) {
+  const structuralCount = t.structuralIssues.length;
+  const formulaCount = t.formulaIssues.length;
+  const parts = [
+    structuralCount ? `${structuralCount} structural issue${structuralCount === 1 ? "" : "s"}` : null,
+    formulaCount ? `${formulaCount} formula error${formulaCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const formulaIssuesHtml = t.formulaIssues.map(raw => {
+    const i = parseFormulaIssue(raw);
+    if (i.fileRate != null && i.canonicalRate != null) {
+      return `
+        <div class="issue">
+          <div class="issue-title">${escapeHtml(i.rule)}</div>
+          <div class="rate-badges">
+            <span class="rate-badge bad">${i.fileRate}%</span>
+            <span class="rate-arrow">→ should be</span>
+            <span class="rate-badge good">${i.canonicalRate}%</span>
+          </div>
+          ${i.detail ? `<div class="issue-meta">${escapeHtml(i.detail)}</div>` : ""}
+        </div>`;
+    }
+    return `<div class="issue"><div class="issue-title">${escapeHtml(raw.message)}</div>${raw.detail ? `<div class="issue-meta">${escapeHtml(raw.detail)}</div>` : ""}</div>`;
+  }).join("");
+
+  const structuralIssuesHtml = t.structuralIssues.map(i => `
+    <div class="issue">
+      <div class="issue-title">${escapeHtml(i.message)}</div>
+      ${i.detail ? `<div class="issue-meta">${escapeHtml(i.detail)}</div>` : ""}
+    </div>
+  `).join("");
+
+  return `
+    <div class="tw ${variant}">
+      ${label ? `<div class="variant-label">${escapeHtml(label)}</div>` : ""}
+      <header>
+        <div class="icon-circle">${icon(variant === "critical" ? "x-circle" : variant === "amber" ? "alert-triangle" : "info", "size-24 no-offset")}</div>
+        <div>
+          <div class="title">This report uses an outdated template</div>
+          <div class="subtitle">Detected ${parts}. The file's built-in formulas don't match the current rules, so we can't trust the values it produces. Re-export with the current template and upload again.</div>
+        </div>
+      </header>
+
+      ${formulaCount > 0 ? `
+        <div class="detail-card">
+          <div class="detail-label">Formula errors detected</div>
+          ${formulaIssuesHtml}
+        </div>` : ""}
+
+      ${structuralCount > 0 ? `
+        <div class="detail-card">
+          <div class="detail-label">Structural issues</div>
+          ${structuralIssuesHtml}
+        </div>` : ""}
+
+      <div class="actions">
+        <a class="btn btn-primary" href="${escapeHtml(CORRECT_TEMPLATE_URL)}" target="_blank" rel="noopener">${icon("download")} Get the correct template</a>
+        <button class="btn btn-secondary" data-action="reset-upload">Try another file</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTemplateBanner(t) {
+  if (!t || t.valid) return "";
+  return renderTemplateWarningVariant(t, "amber", null);
+}
+
+// Sub-classify a failed check. Returns one of:
+//   "forgot-to-total"   — totals cell is blank/0, per-date data exists      (auto-fixable when non-monetary)
+//   "wrong-arithmetic"  — both exist but disagree                           (manual review)
+//   "wrong-allocation"  — entered remittance ≠ canonical %                  (manual review)
+//   "missing-entry"     — totals exist, per-date blank                      (manual review)
+//   "template-defect"   — file's built-in formula uses wrong rate           (manual review, surfaced by template banner)
+//   "rounding"          — within tolerance after generous rounding          (warn only)
+function classifyFailure(check, report) {
+  // Calculated > 0 and actual is null/0 → forgot-to-total.
+  const calc = Number(check.calc) || 0;
+  const actual = check.actual == null ? null : Number(check.actual);
+
+  // Template defect: the related percentage rule was flagged in the template-validity check.
+  if (report && report.templateValidity && report.templateValidity.formulaIssues.length) {
+    const checkLabel = `${check.section} ${check.label}`.toLowerCase();
+    for (const issue of report.templateValidity.formulaIssues) {
+      const tokens = issue.message.toLowerCase().match(/\d+%\s*of\s*\w+/);
+      if (tokens && checkLabel.includes(tokens[0])) return "template-defect";
+    }
+  }
+
+  // Wrong allocation: any failure in a remittance section that isn't a template defect.
+  if (/regional remittance|parish operations|pastor allowance|provincial remittance|allocation reconciliation/i.test(check.section)) {
+    return "wrong-allocation";
+  }
+
+  // Missing entry: totals exist, per-date sum is 0.
+  if (actual != null && actual !== 0 && calc === 0) return "missing-entry";
+
+  // Forgot-to-total: per-date sum > 0, totals cell is null or 0.
+  if (calc > 0 && (actual == null || actual === 0)) return "forgot-to-total";
+
+  // Otherwise: both exist but disagree.
+  return "wrong-arithmetic";
+}
+
+// Look up severity for a failed check. Per-LABEL overrides win over per-SECTION.
+function severityForCheck(check) {
+  for (const entry of LABEL_SEVERITY) {
+    if (entry.pattern.test(check.label)) return entry.severity;
+  }
+  return FIELD_SEVERITY[check.section] || FIELD_SEVERITY._default;
+}
+
+// True only when an issue is safe to auto-fix:
+//   - Sub-type is "forgot-to-total" (parser knows the right value)
+//   - Field is non-monetary (severity is warn or info)
+//   - We have a cell address to write to
+function isAutoFixable(failure) {
+  if (failure.subType !== "forgot-to-total") return false;
+  if (failure.severity === "fail") return false; // money fields never auto-fix
+  if (!failure.cellAddress) return false;
+  return true;
+}
+
+// Resolve cell address for a check. The Statistics validation entries carry cellAddress
+// directly; future fields can register their address here.
+function cellAddressForCheck(check, report) {
+  if (check.section === "Statistics" && report && report.statistics) {
+    const match = report.statistics.validation.find(s => check.label.toLowerCase().startsWith(s.label.toLowerCase()));
+    if (match && match.cellAddress) return match.cellAddress;
+  }
+  return null;
+}
+
+// Plain-language title + explanation + suggested fix for one failed check.
+// Returns { title, explanation, fixText } — friendly, jargon-free, no math symbols.
+// Numbers in count fields (Births, Converts, etc.) render as integers (5, not 5.00);
+// money fields keep 2 decimals (€1,070.00).
+function explainFailure(failure, report) {
+  const { check, subType } = failure;
+  const fieldName = check.label.replace(/\s*\([^)]*\)\s*$/, "").replace(/^Total\s+/, "").trim();
+  const f = formatterForCheck(check);
+
+  switch (subType) {
+    case "forgot-to-total": {
+      const contributors = check.section === "Statistics"
+        ? statisticsContributors(check, report)
+        : null;
+      const total = f(check.calc);
+      const reported = f(check.actual ?? 0);
+      const cellRef = failure.cellAddress ? `cell ${failure.cellAddress}` : "the totals row";
+
+      let explanation;
+      if (contributors && contributors.length) {
+        const entryCount = contributors.length;
+        const friendlyList = friendlyJoin(contributors.map(c => `${c.value} on ${c.date}`));
+        explanation = `${entryCount} ${entryCount === 1 ? "entry" : "entries"} this month — ${friendlyList} — ` +
+          `for a total of ${total}. But ${cellRef} shows ${reported}. ` +
+          `Likely the preparer added ${fieldName} to the weekly rows but forgot to update the totals row.`;
+      } else {
+        explanation = `The weekly entries add up to ${total}, but ${cellRef} shows ${reported}. ` +
+          `Likely the totals row was never updated.`;
+      }
+
+      return {
+        title: `The "${fieldName}" total wasn't updated`,
+        explanation,
+        fixText: failure.cellAddress
+          ? `Set ${failure.cellAddress} to ${total}`
+          : `Update the ${fieldName} total to ${total}`,
+      };
+    }
+    case "wrong-arithmetic": {
+      const calculated = f(check.calc);
+      const reported = f(check.actual);
+      const cellRef = failure.cellAddress ? `cell ${failure.cellAddress}` : "the totals row";
+      return {
+        title: `The "${fieldName}" totals don't agree`,
+        explanation: `Adding the weekly entries gives ${calculated}, but ${cellRef} shows ${reported}. ` +
+                     `Either some weekly entries are missing, or the totals row is incorrect. Please review.`,
+        fixText: `Please review the file and re-upload.`,
+      };
+    }
+    case "wrong-allocation": {
+      const expected = f(check.calc);
+      const actual = f(check.actual ?? 0);
+      const delta = f(Math.abs(check.calc - (check.actual ?? 0)));
+      return {
+        title: `${fieldName} amount doesn't match the rule`,
+        explanation: `Based on the canonical rules, this should be ${expected}, but the file has ${actual} ` +
+                     `(a difference of ${delta}). This affects how money is allocated.`,
+        fixText: `Please review the values in the spreadsheet, correct them, and re-upload.`,
+      };
+    }
+    case "missing-entry": {
+      return {
+        title: `"${fieldName}" total has a value but no weekly entries`,
+        explanation: `The totals row shows ${f(check.actual)}, but no weekly rows have any ${fieldName} values. ` +
+                     `The per-date entries may have been deleted.`,
+        fixText: `Please review and re-upload.`,
+      };
+    }
+    case "template-defect": {
+      return {
+        title: `${fieldName} is affected by a template defect`,
+        explanation: `The file's built-in formula uses the wrong rate. See the outdated-template banner above.`,
+        fixText: `Re-export with the current template.`,
+      };
+    }
+    default:
+      return {
+        title: `${check.section} — ${check.label}`,
+        explanation: `Calculated ${f(check.calc)}, file has ${f(check.actual)}.`,
+        fixText: `Please review and re-upload.`,
+      };
+  }
+}
+
+// Return contributing per-date entries for a Statistics field as structured objects:
+// [{ date: "April 11", value: 3 }, { date: "April 18", value: 2 }] — for friendly rendering.
+function statisticsContributors(check, report) {
+  if (!report || !report.statistics || !report.statistics.perDate) return null;
+  const labelLower = check.label.toLowerCase();
+  const statField = STAT_FIELDS.find(f => labelLower.startsWith(f.label.toLowerCase()));
+  if (!statField) return null;
+  return report.statistics.perDate
+    .filter(d => (d.stats[statField.key] || 0) > 0)
+    .map(d => ({
+      date: formatLongDate(d.date) || `row ${d.row}`,
+      value: d.stats[statField.key],
+    }));
+}
+
+// "Apr 11" → "April 11" (full month name, no year, no zero-padding on day).
+function formatLongDate(yyyymmdd) {
+  if (!yyyymmdd) return null;
+  const m = yyyymmdd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return yyyymmdd;
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}`;
+}
+
+// Join an array of strings with commas + "and" — natural language list:
+//   ["a"]           → "a"
+//   ["a", "b"]      → "a and b"
+//   ["a", "b", "c"] → "a, b, and c"
+function friendlyJoin(items) {
+  if (!items || items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
+}
+
+function formatShortDate(yyyymmdd) {
+  if (!yyyymmdd) return null;
+  const m = yyyymmdd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return yyyymmdd;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}`;
+}
+
+// Take a raw failed check from gradeChecks and enrich it into a "Failure" object
+// with sub-type, severity, cellAddress, autoFixable flag, and pre-rendered text.
+function buildFailure(check, report) {
+  const subType = classifyFailure(check, report);
+  const severity = severityForCheck(check);
+  const cellAddress = cellAddressForCheck(check, report);
+  const failure = { check, subType, severity, cellAddress };
+  failure.autoFixable = isAutoFixable(failure);
+  Object.assign(failure, explainFailure(failure, report));
+  return failure;
+}
+
+// Group every validation check into one of three user-facing categories. Used by
+// the compact summary so the user sees "12 monetary checks · 8 remittance · 12 statistics"
+// instead of a raw count of all 45 checks.
+function categorizeChecks(checks) {
+  const buckets = { monetary: [], remittance: [], statistics: [], other: [] };
+  for (const c of checks) {
+    const tag = `${c.section} ${c.label}`.toLowerCase();
+    if (/regional remittance|parish operations|pastor allowance|provincial remittance|allocation reconciliation/i.test(c.section)) {
+      buckets.remittance.push(c);
+    } else if (c.section === "Statistics") {
+      buckets.statistics.push(c);
+    } else if (/money|offering|tithe|thanksgiving|others|sum|weekly totals|per-date money|parish records/i.test(tag)) {
+      buckets.monetary.push(c);
+    } else {
+      buckets.other.push(c);
+    }
+  }
+  return buckets;
+}
+
+// Compact-summary view: shown when the report is 100% clean. Three checklist rows
+// (Monetary / Remittance / Statistics) plus a "Show full report" button.
+function renderCompactSummary(report, grade) {
+  const buckets = categorizeChecks(grade.validated);
+  const parishName = report.source.parish || "this parish";
+  const pastor = report.source.pastor;
+  const reportMonth = report.source.reportMonth || "the report period";
+
+  // Subtitle weaves Pastor and Parish together: "Pastor X at Parish Y · 46 checks passed"
+  const subtitleParts = [];
+  if (pastor) subtitleParts.push(`${escapeHtml(pastor)} at ${escapeHtml(parishName)}`);
+  else if (parishName !== "this parish") subtitleParts.push(escapeHtml(parishName));
+  subtitleParts.push(`all ${grade.validated.length} validation checks passed`);
+  const subtitle = subtitleParts.join(" · ");
+
+  const row = (label, count, detail) => `
+    <div class="compact-row">
+      <div class="check">${icon("check-circle-2", "size-20 no-offset")}</div>
+      <div class="row-label">${escapeHtml(label)}</div>
+      <div class="row-detail">${count} ${count === 1 ? "check" : "checks"} passed${detail ? ` · ${escapeHtml(detail)}` : ""}</div>
+    </div>`;
+
+  return `
+    <div class="compact-summary">
+      <div class="compact-header">
+        <div class="compact-icon">${icon("check-circle-2", "size-32 no-offset")}</div>
+        <div>
+          <div class="compact-title">Everything checks out for ${escapeHtml(reportMonth)} Report</div>
+          <div class="compact-subtitle">${subtitle}</div>
+        </div>
+      </div>
+      <div class="compact-checklist">
+        ${row("Monetary", buckets.monetary.length, "Offering, Tithe, Thanksgiving, Others")}
+        ${row("Remittance", buckets.remittance.length, "Regional, Parish Ops, Pastor, Provincial")}
+        ${row("Statistics", buckets.statistics.length, "Attendance, Births, Marriages, Workers, etc.")}
+      </div>
+      <div class="compact-actions">
+        <button class="compact-btn" data-action="submit-report">Submit your report ${icon("arrow-right", "size-14")}</button>
+        <button class="compact-btn compact-btn-secondary" data-action="show-full-report">Show full report</button>
+      </div>
+    </div>
+  `;
+}
+
+// Post-submit confirmation card — replaces the compact summary after the user submits.
+function renderSubmitConfirmation(report, submittedAt) {
+  const parishName = report.source.parish || "this parish";
+  const reportMonth = report.source.reportMonth || "the report period";
+  const timeStr = submittedAt.toLocaleString(undefined, {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+  return `
+    <div class="compact-summary">
+      <div class="compact-header">
+        <div class="compact-icon">${icon("check-circle-2", "size-32 no-offset")}</div>
+        <div>
+          <div class="compact-title">Report submitted for ${escapeHtml(parishName)}</div>
+          <div class="compact-subtitle">${escapeHtml(reportMonth)} · received ${escapeHtml(timeStr)}</div>
+        </div>
+      </div>
+      <div class="compact-checklist">
+        <div class="compact-row">
+          <div class="check">${icon("check-circle-2", "size-20 no-offset")}</div>
+          <div class="row-label">Saved to records</div>
+          <div class="row-detail">All validation checks passed before submission</div>
+        </div>
+      </div>
+      <div class="compact-actions">
+        <button class="compact-btn" data-action="reset-upload">Submit another report</button>
+      </div>
+    </div>
+  `;
+}
+
+// Hook up the buttons inside the compact summary.
+function wireCompactSummaryActions(report) {
+  document.querySelectorAll('[data-action="show-full-report"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      SHOW_FULL_REPORT_FORCED = true;
+      render(report);
+    });
+  });
+  document.querySelectorAll('[data-action="submit-report"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      submitReport(report, btn);
+    });
+  });
+  document.querySelectorAll('[data-action="reset-upload"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      $("#report").innerHTML = "";
+      $("#errors").innerHTML = "";
+      $("#filename").textContent = "";
+      $("#file").click();
+    });
+  });
+}
+
+// Mock submit: in the prototype this just shows a confirmation card. When the database
+// integration is ready, replace this body with a fetch() POST to the persistence endpoint.
+async function submitReport(report, btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Submitting…";
+  }
+  // Simulate a small network delay so the UX feels real.
+  await new Promise(resolve => setTimeout(resolve, 400));
+  const submittedAt = new Date();
+  $("#report").innerHTML = renderFixesLog() + renderSubmitConfirmation(report, submittedAt);
+  wireLucideIcons();
+  // Wire up the "Submit another report" button on the confirmation card.
+  document.querySelectorAll('[data-action="reset-upload"]').forEach(b => {
+    b.addEventListener("click", () => {
+      $("#report").innerHTML = "";
+      $("#errors").innerHTML = "";
+      $("#filename").textContent = "";
+      $("#file").click();
+    });
+  });
+}
+
+// Render the "Fixes Applied" log at the top of the report. Returns "" when no fixes
+// have been applied this session. Persists across re-renders within the session.
+function renderFixesLog() {
+  if (!SESSION_FIXES.length) return "";
+  const fmtTime = (d) => d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const fmtVal = (v) => v == null ? "(blank)" : String(v);
+  return `
+    <div class="fixes-log">
+      <div class="log-title">
+        <span>✓ Fixes applied this session</span>
+        <span class="count">${SESSION_FIXES.length}</span>
+      </div>
+      ${SESSION_FIXES.map(f => `
+        <div class="log-row">
+          <span class="log-time">${fmtTime(f.appliedAt)}</span>
+          <div class="log-detail">
+            <strong>${escapeHtml(f.field)}</strong>
+            <span class="log-cell">${escapeHtml(f.cellAddress)}</span>
+          </div>
+          <div class="log-change">
+            <span class="old">${escapeHtml(fmtVal(f.oldValue))}</span>
+            <span class="arrow">→</span>
+            <span class="new">${escapeHtml(fmtVal(f.newValue))}</span>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderSummary(grade, report) {
+  const { validated, notValidated, missing, total } = grade;
+  const allOk = notValidated.length === 0 && missing.length === 0;
+
+  // Build rich Failure objects (with severity, sub-type, cell address, auto-fix flag, and pre-rendered text).
+  const failures = notValidated.map(c => buildFailure(c, report));
+  // Stash globally so click handlers can resolve failures by index.
+  CURRENT_FAILURES = failures;
+
+  // Banner color reflects the WORST severity present. If only "warn" failures exist, the banner is amber, not red.
+  const severityRank = { fail: 3, warn: 2, info: 1 };
+  const worstSev = failures.reduce((s, f) => severityRank[f.severity] > severityRank[s] ? f.severity : s, "info");
+  const cls = allOk ? "ok" : worstSev === "fail" ? "bad" : "partial";
+  const bannerIcon = allOk ? icon("check-circle-2", "size-18") : worstSev === "fail" ? icon("x-circle", "size-18") : icon("alert-triangle", "size-18");
+
+  const failCount = failures.filter(f => f.severity === "fail").length;
+  const warnCount = failures.filter(f => f.severity === "warn").length;
+  const sevBreakdown = (failCount > 0 && warnCount > 0)
+    ? ` (${failCount} fail · ${warnCount} warn)`
+    : "";
+
+  const title = allOk
+    ? `All ${total} checks validated`
+    : `${notValidated.length} of ${total} checks failed validation${sevBreakdown}`;
+
+  // Render each failure as a rich card.
+  const failureCardsHtml = failures.length === 0 ? "" : `
+    <div class="failure-list">
+      ${failures.map((f, idx) => renderFailureCard(f, idx)).join("")}
+    </div>`;
+
+  // Missing fields stay as a small list (not a full failure card — they're informational).
+  const missingHtml = missing.length === 0 ? "" : `
+    <div class="summary-detail">
+      <ul>
+        ${missing.map(c => `<li><span class="check-tag preparer">missing</span><strong>${c.section}</strong> · ${c.label} — calculated <code>${fmt(c.calc)}</code>, actual value not found in file</li>`).join("")}
+      </ul>
+    </div>`;
+
+  return `
+    <div class="summary ${cls}">
+      <div>
+        <div class="title">${bannerIcon} ${title}</div>
+        <div class="stats">${validated.length} validated · ${notValidated.length} failed · ${missing.length} missing</div>
+      </div>
+      ${failureCardsHtml}
+      ${missingHtml}
+    </div>`;
+}
+
+// Render one failure as THREE stacked layout variants (A/B/C) so the user can
+// pick visually. Once a layout is chosen we'll keep only one renderer.
+// All three variants share: cell-address-as-subject header, refined sub-type chip,
+// no severity chip (color carries severity), no em dashes, integers without decimals.
+function renderFailureCard(failure, idx) {
+  // Pull the structured contributing entries (used by Layout A and the source line in B/C).
+  const entries = failure.check.section === "Statistics"
+    ? (statisticsContributors(failure.check, CURRENT_REPORT) || [])
+    : [];
+  const f = formatterForCheck(failure.check);
+  const correctValue = f(failure.check.calc);
+  const currentValue = f(failure.check.actual ?? 0);
+  // Field name without the parenthetical suffix that's there for engineering clarity.
+  const fieldName = failure.check.label.replace(/\s*\([^)]*\)\s*$/, "").replace(/^Total\s+/, "").trim();
+  // Subject header: cell address + field name.
+  const cellChip = failure.cellAddress
+    ? `<span class="cell-ref" data-cell="${failure.cellAddress}" title="Click to copy ${failure.cellAddress}">${failure.cellAddress}</span>`
+    : "";
+  const subjectText = failure.cellAddress
+    ? `${cellChip}${escapeHtml(fieldName)} total`
+    : `${escapeHtml(fieldName)} total`;
+  // Sub-type chip — sentence case, friendlier wording.
+  const subTypeLabel = ({
+    "forgot-to-total": "Totals row not updated",
+    "wrong-arithmetic": "Totals don't match",
+    "wrong-allocation": "Allocation rule not met",
+    "missing-entry": "Missing weekly entries",
+    "template-defect": "Outdated template",
+  })[failure.subType] || failure.subType;
+  const subjectHeader = `
+    <div class="card-subject">
+      <div class="subject-text">${subjectText}</div>
+      <span class="subtype-chip">${escapeHtml(subTypeLabel)}</span>
+    </div>`;
+  // Cause line.
+  const causeLine = failure.subType === "forgot-to-total"
+    ? `<div class="card-cause">the totals row wasn't refreshed after weekly entries were added.</div>`
+    : "";
+  // Fix CTA (shared across all variants).
+  const fixBtn = failure.autoFixable
+    ? `<button class="fix-btn" data-fix-idx="${idx}">${icon("check")} Fix this for me — Set ${failure.cellAddress} to ${correctValue}</button>`
+    : `<span class="fix-text">${escapeHtml(failure.fixText)}</span>`;
+  const fixBlock = `
+    <div class="card-fix">${fixBtn}</div>
+    ${failure.cellAddress ? `<span class="copy-toast" data-toast-for="${failure.cellAddress}">copied!</span>` : ""}`;
+
+  // Source line for the "Should be" row — e.g., "3 on April 11 + 2 on April 18".
+  const sourceText = entries.length
+    ? entries.map(e => `${e.value} on ${e.date}`).join(" + ")
+    : "weekly entries";
+
+  return `
+    <div class="failure-card ${failure.severity} layout-c" data-failure-idx="${idx}">
+      ${subjectHeader}
+      <div class="card-headline">The ${escapeHtml(fieldName)} total needs to be updated.</div>
+      <ul class="compare-list">
+        <li>
+          <span class="li-label">Currently</span>
+          <span><span class="li-value">${currentValue}</span></span>
+        </li>
+        <li>
+          <span class="li-label">Should be</span>
+          <span><span class="li-value">${correctValue}</span><span class="li-source">${escapeHtml(sourceText)}</span></span>
+        </li>
+      </ul>
+      ${causeLine}
+      ${fixBlock}
+    </div>
+  `;
+}
+
+// Stash the most recent report so renderFailureCard() can access it for
+// per-failure detail like statisticsContributors() without prop-drilling.
+let CURRENT_REPORT = null;
+
+// Per-session toggle: when true, force the full report even though the report is 100% clean.
+// Reset on every new file load. Persists across re-renders within a session.
+let SHOW_FULL_REPORT_FORCED = false;
+
+function render(report) {
+  const r = report;
+  // Stash so per-failure helpers can access the full report without prop-drilling.
+  CURRENT_REPORT = report;
+
+  // Early exit: if the template is outdated, suppress all validation/parish output
+  // and show only the warning. The user must re-upload with the current template.
+  if (r.templateValidity && !r.templateValidity.valid) {
+    $("#report").innerHTML = renderTemplateBanner(r.templateValidity);
+    wireTemplateWarningActions();
+    wireLucideIcons();
+    return;
+  }
+
+  const checks = buildChecks(r);
+  const grade = gradeChecks(checks);
+
+  // 100%-clean fast path: 0 fails, 0 warns (per Failure objects), 0 missing.
+  // Show a compact summary with a "Show full report" button. Bypassed once the
+  // user clicks the button (SHOW_FULL_REPORT_FORCED flips for this session).
+  const allClean = grade.notValidated.length === 0 && grade.missing.length === 0;
+  if (allClean && !SHOW_FULL_REPORT_FORCED) {
+    $("#report").innerHTML = renderFixesLog() + renderCompactSummary(r, grade);
+    wireCompactSummaryActions(r);
+    wireLucideIcons();
+    return;
+  }
+
+  const html = `
+    ${renderFixesLog()}
+    ${renderSummary(grade, r)}
+
+    <h2>Row 1 — Parish Info</h2>
+    <table>
+      <tr><td>Name of Parish</td><td>${escapeHtml(r.source.parish ?? "—")}</td></tr>
+      <tr><td>Month of the Report</td><td>${escapeHtml(r.source.reportMonth)}</td></tr>
+      <tr><td>Name of Pastor</td><td>${escapeHtml(r.source.pastor ?? "—")}</td></tr>
+      <tr><td>Mobile</td><td>${escapeHtml(r.source.mobile ?? "—")}</td></tr>
+      <tr><td>Email</td><td>${r.source.email ? `<a href="mailto:${escapeHtml(r.source.email)}" style="color:var(--accent)">${escapeHtml(r.source.email)}</a>` : "—"}</td></tr>
+    </table>
+
+    <h2>Row 2 — Parish Records (with re-summed validation)</h2>
+    <table>
+      <thead><tr><th>Field</th><th class="num">Reported</th><th class="num">Re-summed</th><th class="flag">Match</th></tr></thead>
+      ${monthlyRow("Average Attendance", r.monthlyValidation.averageAttendance, "avg")}
+      ${monthlyRow("Avg Men", r.monthlyValidation.averageMen, "avg")}
+      ${monthlyRow("Avg Women", r.monthlyValidation.averageWomen, "avg")}
+      ${monthlyRow("Avg Children", r.monthlyValidation.averageChildren, "avg")}
+      ${monthlyRow("Total Offering", r.monthlyValidation.offering)}
+      ${monthlyRow("Total Tithe", r.monthlyValidation.tithe)}
+      ${monthlyRow("Total Thanksgiving", r.monthlyValidation.thanksgiving)}
+      ${monthlyRow("Total of Others", r.monthlyValidation.others)}
+      ${monthlyRow("Sum", r.monthlyValidation.sum)}
+    </table>
+
+    ${renderOrderedSections([
+      { id: "buildup",       html: renderBuildUp(r.perDate, r.monthlyValidation),     hasErrors: hasBuildUpErrors(r.monthlyValidation) },
+      { id: "sanity",        html: renderSanity(r.sanityChecks),                       hasErrors: hasSanityErrors(r.sanityChecks) },
+      { id: "weekly-totals", html: renderWeeklyTotals(r.weeklyTotals),                 hasErrors: hasWeeklyTotalsErrors(r.weeklyTotals) },
+      { id: "allocation",    html: renderAllocationReconciliation(r.allocationReconciliation), hasErrors: !r.allocationReconciliation.validated },
+    ])}
+
+    ${renderOrderedSections([
+      {
+        id: "per-date-detail",
+        html: (() => {
+          const hasErr = hasPerDateErrors(r.perDate);
+          const visibleRows = r.perDate.filter(d => d.hasAttendance || d.hasMoney).length;
+          return `
+            <details class="section" data-section-id="per-date-detail" data-has-errors="${hasErr}" ${hasErr ? "open" : ""}>
+              <summary>Per-Date Detail <span class="badge ${hasErr ? "bad" : ""}">${visibleRows} rows${hasErr ? " · has issues" : ""}</span></summary>
+              <div class="body">${renderPerDateDetail(r.perDate)}</div>
+            </details>`;
+        })(),
+        hasErrors: hasPerDateErrors(r.perDate),
+      },
+      {
+        id: "statistics",
+        html: renderStatistics(r.statistics),
+        hasErrors: hasStatisticsErrors(r.statistics),
+      },
+    ])}
+
+    <h2>Row 3 — Regional Remittance</h2>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Calculated</th><th class="num">Actual</th><th class="flag">Match</th></tr></thead>
+      ${row("5% of Total Offering", r.regionalRemittance.calculated.offering5, r.regionalRemittance.actual.offering5)}
+      ${row("20% of Total Tithe", r.regionalRemittance.calculated.tithe20, r.regionalRemittance.actual.tithe20)}
+      ${row("Total Regional Remittance", r.regionalRemittance.calculated.total, r.regionalRemittance.actual.total)}
+    </table>
+
+    <h2>Row 4 — Parish Operations</h2>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Calculated</th><th class="num">Actual</th><th class="flag">Match</th></tr></thead>
+      ${row("55% of Total Tithe", r.parishOperations.calculated.tithe55, r.parishOperations.actual.tithe55)}
+      ${row("95% of Total Offering", r.parishOperations.calculated.offering95, r.parishOperations.actual.offering95)}
+      ${row("30% of Total Thanksgiving", r.parishOperations.calculated.thanksgiving30, r.parishOperations.actual.thanksgiving30)}
+      ${row("Total Parish Operations", r.parishOperations.calculated.total, r.parishOperations.actual.total)}
+    </table>
+
+    <h2>Row 5 — Parish Pastor Allowance</h2>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Calculated</th><th class="num">Actual</th><th class="flag">Match</th></tr></thead>
+      ${row("20% of Total Tithe", r.parishPastorAllowance.calculated.tithe20, r.parishPastorAllowance.actual.tithe20)}
+      ${row("70% of Total Thanksgiving", r.parishPastorAllowance.calculated.thanksgiving70, r.parishPastorAllowance.actual.thanksgiving70)}
+      ${row("Total Parish Pastor Allowance", r.parishPastorAllowance.calculated.total, r.parishPastorAllowance.actual.total)}
+    </table>
+
+    <h2>Row 6 — Provincial Remittance</h2>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Calculated</th><th class="num">Actual</th><th class="flag">Match</th></tr></thead>
+      ${row("5% of Total Tithe", r.provincialRemittance.calculated.tithe5, r.provincialRemittance.actual.tithe5)}
+    </table>
+
+    <h2>Row 7 — Others</h2>
+    <table>
+      <tr><td>Total Others</td><td class="num">${fmt(r.others.totalOthers)}</td></tr>
+    </table>
+
+    <h2>Coverage Check</h2>
+    <table>
+      <thead><tr><th>Source</th><th>Allocation rules</th><th class="num">Coverage</th></tr></thead>
+      <tr><td>Offering</td><td>${r.coverage.offering.rules}</td><td class="num">${r.coverage.offering.coveragePct}%</td></tr>
+      <tr><td>Tithe</td><td>${r.coverage.tithe.rules}</td><td class="num">${r.coverage.tithe.coveragePct}%</td></tr>
+      <tr><td>Thanksgiving</td><td>${r.coverage.thanksgiving.rules}</td><td class="num">${r.coverage.thanksgiving.coveragePct}%</td></tr>
+      <tr class="warn-row"><td>Others</td><td>${r.coverage.others.rules}</td><td class="num">${r.coverage.others.coveragePct}%</td></tr>
+    </table>
+
+    <div class="actions">
+      <button id="dl-json">Download JSON</button>
+      <button id="dl-xlsx" class="ghost">Download Excel summary</button>
+    </div>
+
+    <details>
+      <summary>Inspect raw report object</summary>
+      <pre>${escapeHtml(JSON.stringify(r, null, 2))}</pre>
+    </details>
+  `;
+  $("#report").innerHTML = html;
+  $("#dl-json").addEventListener("click", () => downloadJSON(r));
+  $("#dl-xlsx").addEventListener("click", () => downloadXLSX(r));
+  wireFailureCardActions();
+  wireLucideIcons();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Render a Lucide icon as an inline marker. The lucide.createIcons() call
+// (run after each render via wireLucideIcons) replaces these <i> tags with SVGs.
+// `name` = lucide icon name (e.g., "check-circle-2", "alert-triangle").
+// `extra` = optional class names or attributes (e.g., "size-16").
+function icon(name, extra = "") {
+  const cls = `lucide-icon ${extra}`.trim();
+  return `<i data-lucide="${name}" class="${cls}"></i>`;
+}
+
+// Replace all <i data-lucide="..."> markers in #report with actual SVGs.
+// Must be called after every render that adds icons to the DOM.
+function wireLucideIcons() {
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
+  }
+}
+
+// ============================================================
+//  ERROR SHOWCASE — visible via ?demo=errors
+// ============================================================
+// Renders one card for every error sub-type using mock data.
+// Used for design iteration and as a living style guide.
+
+function buildShowcaseFailures() {
+  // Each entry follows the shape of a real Failure object so the same
+  // renderFailureCard() pipeline is exercised — no parallel renderer to maintain.
+  const mk = (overrides) => {
+    const base = {
+      check: { section: "Statistics", label: "Field (per-date sum vs Total row)", calc: 0, actual: 0 },
+      severity: "warn",
+      subType: "forgot-to-total",
+      cellAddress: null,
+      autoFixable: false,
+      title: "",
+      explanation: "",
+      fixText: "Please review and re-upload.",
+      ...overrides,
+    };
+    base.check = { ...base.check, ...(overrides.check || {}) };
+    return base;
+  };
+
+  return [
+    // --- forgot-to-total · Statistics (auto-fixable) ---
+    mk({
+      check: { section: "Statistics", label: "Converts (per-date sum vs Total row)", calc: 5, actual: 0 },
+      severity: "warn",
+      subType: "forgot-to-total",
+      cellAddress: "P48",
+      autoFixable: true,
+      title: 'The "Converts" total wasn\'t updated',
+      explanation: '2 entries this month — 3 on April 11 and 2 on April 18 — for a total of 5. But cell P48 shows 0. Likely the preparer added Converts to the weekly rows but forgot to update the totals row.',
+      fixText: "Set P48 to 5",
+    }),
+    // --- wrong-arithmetic · Statistics (manual review) ---
+    mk({
+      check: { section: "Statistics", label: "Births (per-date sum vs Total row)", calc: 4, actual: 7 },
+      severity: "warn",
+      subType: "wrong-arithmetic",
+      cellAddress: "M48",
+      autoFixable: false,
+      title: 'The "Births" totals don\'t agree',
+      explanation: 'Adding the weekly entries gives 4, but cell M48 shows 7. Either some weekly entries are missing, or the totals row is incorrect. Please review.',
+      fixText: "Please review the file and re-upload.",
+    }),
+    // --- wrong-allocation · Money (manual review) ---
+    mk({
+      check: { section: "Parish Operations", label: "55% of Total Tithe", calc: 1408.55, actual: 385.06 },
+      severity: "fail",
+      subType: "wrong-allocation",
+      cellAddress: "G50",
+      autoFixable: false,
+      title: "55% of Tithe amount doesn't match the rule",
+      explanation: "Based on the canonical rules, this should be 1,408.55, but the file has 385.06 (a difference of 1,023.49). This affects how money is allocated.",
+      fixText: "Please review the values in the spreadsheet, correct them, and re-upload.",
+    }),
+    // --- missing-entry · Statistics (manual review) ---
+    mk({
+      check: { section: "Statistics", label: "Marriages (per-date sum vs Total row)", calc: 0, actual: 3 },
+      severity: "warn",
+      subType: "missing-entry",
+      cellAddress: "N48",
+      autoFixable: false,
+      title: '"Marriages" total has a value but no weekly entries',
+      explanation: 'The totals row shows 3, but no weekly rows have any Marriages values. The per-date entries may have been deleted.',
+      fixText: "Please review and re-upload.",
+    }),
+    // --- template-defect · Money (cascaded from outdated template) ---
+    mk({
+      check: { section: "Provincial Remittance", label: "5% of Total Tithe", calc: 32.09, actual: 19.25 },
+      severity: "fail",
+      subType: "template-defect",
+      cellAddress: "G54",
+      autoFixable: false,
+      title: "5% of Tithe is affected by a template defect",
+      explanation: "The file's built-in formula uses the wrong rate. See the outdated-template banner above.",
+      fixText: "Re-export with the current template.",
+    }),
+  ];
+}
+
+function buildShowcaseSanity() {
+  return [
+    { id: "ok-no-negatives",   level: "ok",   label: "No negative values",                              detail: null },
+    { id: "ok-row1-complete",  level: "ok",   label: "Row 1 (Parish/Pastor/Month) complete",            detail: null },
+    { id: "warn-non-consec",   level: "warn", label: "Non-consecutive Sundays detected",                detail: "2025-11-09 → 2025-11-23 (14d)" },
+    { id: "warn-empty-sun",    level: "warn", label: "Some dated Sundays have no values entered",       detail: "2025-11-30" },
+    { id: "fail-negatives",    level: "fail", label: "Negative values present",                         detail: "2025-11-09 money.tithe=-50" },
+    { id: "fail-row1",         level: "fail", label: "Row 1 fields missing",                            detail: "Pastor In Charge" },
+  ];
+}
+
+function buildShowcaseTemplateValidity() {
+  return {
+    valid: false,
+    structuralIssues: [],
+    formulaIssues: [
+      {
+        kind: "formula",
+        message: "Parish Ops 55% of Tithe: file uses 60% instead of canonical 55%",
+        detail: "Entered 385.06 ÷ source 641.77 ≈ 60%. The current template uses 55%.",
+      },
+      {
+        kind: "formula",
+        message: "Provincial 5% of Tithe: file uses 3% instead of canonical 5%",
+        detail: "Entered 19.25 ÷ source 641.77 ≈ 3%. The current template uses 5%.",
+      },
+    ],
+    issues: [],
+  };
+}
+
+function renderShowcase() {
+  const failures = buildShowcaseFailures();
+  CURRENT_FAILURES = failures; // so the wired Fix buttons can resolve by index
+  const sanity = buildShowcaseSanity();
+  const templateValidity = buildShowcaseTemplateValidity();
+
+  const failureSection = `
+    <h2>Failure card · forgot-to-total (auto-fixable, warn)</h2>
+    <div class="failure-list">${renderFailureCard(failures[0], 0)}</div>
+
+    <h2>Failure card · wrong-arithmetic (manual, warn)</h2>
+    <div class="failure-list">${renderFailureCard(failures[1], 1)}</div>
+
+    <h2>Failure card · wrong-allocation (manual, fail)</h2>
+    <div class="failure-list">${renderFailureCard(failures[2], 2)}</div>
+
+    <h2>Failure card · missing-entry (manual, warn)</h2>
+    <div class="failure-list">${renderFailureCard(failures[3], 3)}</div>
+
+    <h2>Failure card · template-defect (manual, fail)</h2>
+    <div class="failure-list">${renderFailureCard(failures[4], 4)}</div>
+  `;
+
+  const sanitySection = `
+    <h2>Sanity Checks (mixed ok/warn/fail)</h2>
+    ${renderSanity(sanity)}
+  `;
+
+  const templateSection = `
+    <h2>Outdated template warning (full-page banner)</h2>
+    ${renderTemplateBanner(templateValidity)}
+  `;
+
+  $("#report").innerHTML = `
+    <div class="showcase-header">
+      <h1 style="margin:0 0 8px;font-size:24px;color:var(--text)">Error Showcase</h1>
+      <p style="margin:0;color:var(--muted);font-size:14px">Every error type rendered with mock data. Use this as a design reference. <a href="${location.pathname}" style="color:var(--accent)">← back to upload</a></p>
+    </div>
+    ${failureSection}
+    ${sanitySection}
+    ${templateSection}
+  `;
+
+  wireFailureCardActions();
+  wireTemplateWarningActions();
+  wireLucideIcons();
+}
+
+// Hook up "Try another file" buttons inside the template-warning so the user can
+// re-upload without scrolling back to the top.
+function wireTemplateWarningActions() {
+  document.querySelectorAll('[data-action="reset-upload"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      $("#report").innerHTML = "";
+      $("#errors").innerHTML = "";
+      $("#filename").textContent = "";
+      $("#file").click();
+    });
+  });
+}
+
+// ---- Auto-fix: patch a cell in the in-memory workbook and re-validate ----
+// No download, no re-upload. The original .xlsx on disk is untouched; the corrected
+// values flow straight into the report shown on screen. Fixes are logged in
+// SESSION_FIXES so the user can audit what was changed.
+function applyPatchAndRevalidate(failure) {
+  if (!CURRENT_FILE.workbook) {
+    alert("Source workbook is no longer available. Please re-upload.");
+    return;
+  }
+  if (!failure.cellAddress) {
+    alert("This issue can't be auto-fixed (no cell address tracked).");
+    return;
+  }
+  const wb = CURRENT_FILE.workbook;
+  const sheet = wb.Sheets[CURRENT_FILE.sheetName];
+  if (!sheet) {
+    alert(`Sheet "${CURRENT_FILE.sheetName}" not found in workbook.`);
+    return;
+  }
+  const newValue = Number(failure.check.calc);
+  if (!isFinite(newValue)) {
+    alert(`Calculated value is not a number: ${failure.check.calc}`);
+    return;
+  }
+
+  const oldValue = failure.check.actual;
+  const confirmMsg = `Apply this fix in the current session?\n\n` +
+    `Field: ${failure.check.label}\n` +
+    `Cell: ${failure.cellAddress}\n` +
+    `Current value: ${oldValue ?? "(blank)"}\n` +
+    `New value: ${newValue}\n\n` +
+    `The report will be re-validated immediately. Your original file on disk is NOT modified.`;
+  if (!confirm(confirmMsg)) return;
+
+  // Patch the cell in the in-memory sheet object.
+  const existing = sheet[failure.cellAddress];
+  sheet[failure.cellAddress] = {
+    ...existing,
+    t: "n",
+    v: newValue,
+    w: undefined, // clear cached display string so SheetJS re-formats
+    f: undefined, // clear formula if any (we're hardcoding the value)
+  };
+
+  // Log the fix.
+  SESSION_FIXES.push({
+    appliedAt: new Date(),
+    cellAddress: failure.cellAddress,
+    field: failure.check.label,
+    section: failure.check.section,
+    oldValue: oldValue,
+    newValue: newValue,
+  });
+
+  // Re-parse the patched workbook and re-render so every section reflects the corrected data.
+  const report = parseWorkbook(wb);
+  render(report);
+}
+
+// Stash the latest list of failures so click handlers can look them up by index.
+let CURRENT_FAILURES = [];
+
+// In-session log of every fix that's been applied. Survives re-renders within a session
+// (it's a module-level array, not page state). Cleared when a new file is uploaded.
+let SESSION_FIXES = [];
+
+// Hook up: per-issue "Fix this for me" buttons + cell-reference copy-to-clipboard.
+function wireFailureCardActions() {
+  document.querySelectorAll(".fix-btn[data-fix-idx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.fixIdx);
+      const failure = CURRENT_FAILURES[idx];
+      if (!failure) return;
+      btn.disabled = true;
+      try {
+        applyPatchAndRevalidate(failure);
+      } finally {
+        // Note: after re-render the button is replaced; this re-enable mostly matters
+        // if the patch was cancelled and the same DOM stays in place.
+        setTimeout(() => { btn.disabled = false; }, 500);
+      }
+    });
+  });
+  document.querySelectorAll(".cell-ref[data-cell]").forEach(el => {
+    el.addEventListener("click", async () => {
+      const cell = el.dataset.cell;
+      try {
+        await navigator.clipboard.writeText(cell);
+        const toast = document.querySelector(`.copy-toast[data-toast-for="${cell}"]`);
+        if (toast) {
+          toast.classList.add("show");
+          setTimeout(() => toast.classList.remove("show"), 1200);
+        }
+      } catch {
+        // Clipboard not available — silently no-op
+      }
+    });
+  });
+}
+
+// ============================================================
+//  DOWNLOADS
+// ============================================================
+
+function downloadJSON(report) {
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `mreport_${(report.source.parish || "report").toString().replace(/\s+/g, "_")}_${report.source.reportMonth.replace(" ", "_")}.json`;
+  a.click();
+}
+
+function downloadXLSX(r) {
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ["mReport — Parish Summary"],
+    [],
+    ["Parish Info"],
+    ["Name of Parish", r.source.parish ?? ""],
+    ["Month of the Report", r.source.reportMonth],
+    ["Name of Pastor", r.source.pastor ?? ""],
+    ["Mobile", r.source.mobile ?? ""],
+    ["Email", r.source.email ?? ""],
+    [],
+    ["Parish Records"],
+    ["Average Attendance", r.parishRecords.averageAttendance],
+    ["Total Offering", r.parishRecords.totalOffering],
+    ["Total Tithe", r.parishRecords.totalTithe],
+    ["Total Thanksgiving", r.parishRecords.totalThanksgiving],
+    ["Total of Others", r.parishRecords.totalOthers],
+    ["Sum", r.parishRecords.sum],
+    [],
+    ["Regional Remittance", "Calculated", "Actual", "Match"],
+    ["5% of Offering", r.regionalRemittance.calculated.offering5, r.regionalRemittance.actual.offering5, matchLabel(r.regionalRemittance.calculated.offering5, r.regionalRemittance.actual.offering5)],
+    ["20% of Tithe", r.regionalRemittance.calculated.tithe20, r.regionalRemittance.actual.tithe20, matchLabel(r.regionalRemittance.calculated.tithe20, r.regionalRemittance.actual.tithe20)],
+    ["Total Regional Remittance", r.regionalRemittance.calculated.total, r.regionalRemittance.actual.total, matchLabel(r.regionalRemittance.calculated.total, r.regionalRemittance.actual.total)],
+    [],
+    ["Parish Operations", "Calculated", "Actual", "Match"],
+    ["55% of Tithe", r.parishOperations.calculated.tithe55, r.parishOperations.actual.tithe55, matchLabel(r.parishOperations.calculated.tithe55, r.parishOperations.actual.tithe55)],
+    ["95% of Offering", r.parishOperations.calculated.offering95, r.parishOperations.actual.offering95, matchLabel(r.parishOperations.calculated.offering95, r.parishOperations.actual.offering95)],
+    ["30% of Thanksgiving", r.parishOperations.calculated.thanksgiving30, r.parishOperations.actual.thanksgiving30, matchLabel(r.parishOperations.calculated.thanksgiving30, r.parishOperations.actual.thanksgiving30)],
+    ["Total Parish Operations", r.parishOperations.calculated.total, r.parishOperations.actual.total, matchLabel(r.parishOperations.calculated.total, r.parishOperations.actual.total)],
+    [],
+    ["Parish Pastor Allowance", "Calculated", "Actual", "Match"],
+    ["20% of Tithe", r.parishPastorAllowance.calculated.tithe20, r.parishPastorAllowance.actual.tithe20, matchLabel(r.parishPastorAllowance.calculated.tithe20, r.parishPastorAllowance.actual.tithe20)],
+    ["70% of Thanksgiving", r.parishPastorAllowance.calculated.thanksgiving70, r.parishPastorAllowance.actual.thanksgiving70, matchLabel(r.parishPastorAllowance.calculated.thanksgiving70, r.parishPastorAllowance.actual.thanksgiving70)],
+    ["Total Parish Pastor Allowance", r.parishPastorAllowance.calculated.total, r.parishPastorAllowance.actual.total, matchLabel(r.parishPastorAllowance.calculated.total, r.parishPastorAllowance.actual.total)],
+    [],
+    ["Provincial Remittance", "Calculated", "Actual", "Match"],
+    ["5% of Tithe", r.provincialRemittance.calculated.tithe5, r.provincialRemittance.actual.tithe5, matchLabel(r.provincialRemittance.calculated.tithe5, r.provincialRemittance.actual.tithe5)],
+    [],
+    ["Others"],
+    ["Total Others", r.others.totalOthers],
+    [],
+    ["Row 2 Validation (re-summed from per-date)", "Reported", "Re-summed", "Match"],
+    ["Average Attendance", r.monthlyValidation.averageAttendance.reported, r.monthlyValidation.averageAttendance.recomputed, validationLabel(r.monthlyValidation.averageAttendance.validated)],
+    ["Total Offering", r.monthlyValidation.offering.reported, r.monthlyValidation.offering.recomputed, validationLabel(r.monthlyValidation.offering.validated)],
+    ["Total Tithe", r.monthlyValidation.tithe.reported, r.monthlyValidation.tithe.recomputed, validationLabel(r.monthlyValidation.tithe.validated)],
+    ["Total Thanksgiving", r.monthlyValidation.thanksgiving.reported, r.monthlyValidation.thanksgiving.recomputed, validationLabel(r.monthlyValidation.thanksgiving.validated)],
+    ["Total Others", r.monthlyValidation.others.reported, r.monthlyValidation.others.recomputed, validationLabel(r.monthlyValidation.others.validated)],
+    ["Sum", r.monthlyValidation.sum.reported, r.monthlyValidation.sum.recomputed, validationLabel(r.monthlyValidation.sum.validated)],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws, "Summary");
+
+  // ---- Per-Date Detail sheet ----
+  const detailRows = [
+    ["Date", "Day", "Men", "Women", "Children", "Att. Reported", "Att. Calculated", "Att. Match",
+     "Offering", "Tithe", "Thanksgiving", "Others", "€ Reported", "€ Calculated", "€ Match"],
+    ...r.perDate.map(d => [
+      d.date || "",
+      d.day || "",
+      d.attendance.men, d.attendance.women, d.attendance.children,
+      d.attendance.totalReported ?? "", d.attendance.totalCalculated,
+      validationLabel(d.attendance.validated),
+      d.money.offering, d.money.tithe, d.money.thanksgiving, d.money.others,
+      d.money.totalReported ?? "", d.money.totalCalculated,
+      validationLabel(d.money.validated),
+    ]),
+  ];
+  const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
+  wsDetail["!cols"] = [
+    { wch: 12 }, { wch: 10 },
+    { wch: 6 }, { wch: 7 }, { wch: 9 }, { wch: 13 }, { wch: 14 }, { wch: 11 },
+    { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 13 }, { wch: 11 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsDetail, "Per-Date Detail");
+
+  // ---- Weekly Totals sheet ----
+  if (r.weeklyTotals && r.weeklyTotals.length) {
+    const wRows = [
+      ["Week", "Entered € Total", "Re-summed", "Δ", "Match"],
+      ...r.weeklyTotals.map(w => [
+        `WEEK ${w.weekIndex}`,
+        w.enteredTotal ?? "",
+        w.recomputedTotal,
+        w.enteredTotal != null ? Math.abs(w.enteredTotal - w.recomputedTotal) : "",
+        validationLabel(w.validated),
+      ]),
+    ];
+    const wsW = XLSX.utils.aoa_to_sheet(wRows);
+    wsW["!cols"] = [{ wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsW, "Weekly Totals");
+  }
+
+  // ---- Allocation Reconciliation sheet ----
+  if (r.allocationReconciliation) {
+    const a = r.allocationReconciliation;
+    const aRows = [
+      ["Allocation Reconciliation"],
+      [],
+      ["Total monetary income", a.totalIncome],
+      ["Others (no allocation rule)", a.others],
+      ["Expected allocations (Total − Others)", a.expectedAllocations],
+      ["Sum of entered remittances", a.enteredAllocations],
+      ["Δ (entered − expected)", a.delta],
+      ["Match", validationLabel(a.validated)],
+    ];
+    const wsA = XLSX.utils.aoa_to_sheet(aRows);
+    wsA["!cols"] = [{ wch: 38 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, wsA, "Allocation");
+  }
+
+  // ---- Statistics sheet (always include all 12 fields, not just visible ones) ----
+  if (r.statistics && r.statistics.validation) {
+    const sRows = [
+      ["Field", "Per-date sum", "Reported total", "Match"],
+      ...r.statistics.validation.map(s => [s.label, s.recomputed, s.reported ?? "", validationLabel(s.validated)]),
+    ];
+    const wsS = XLSX.utils.aoa_to_sheet(sRows);
+    wsS["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsS, "Statistics");
+  }
+
+  // ---- Sanity Checks sheet ----
+  if (r.sanityChecks && r.sanityChecks.length) {
+    const sRows = [
+      ["Check", "Level", "Detail"],
+      ...r.sanityChecks.map(c => [c.label, c.level, c.detail || ""]),
+    ];
+    const wsCS = XLSX.utils.aoa_to_sheet(sRows);
+    wsCS["!cols"] = [{ wch: 40 }, { wch: 8 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsCS, "Sanity");
+  }
+
+  XLSX.writeFile(wb, `mreport_${(r.source.parish || "report").toString().replace(/\s+/g, "_")}_${r.source.reportMonth.replace(" ", "_")}.xlsx`);
+}
+
+function validationLabel(v) {
+  if (v == null) return "n/a";
+  return v ? "Validated" : "Not validated";
+}
+
+function matchLabel(calc, actual) {
+  if (actual == null) return "missing";
+  return Math.abs(calc - actual) < 0.01 ? "Positive" : "Negative";
+}
+
+// ============================================================
+//  EVENTS
+// ============================================================
+
+const drop = $("#drop");
+const fileInput = $("#file");
+
+// On page load: if the URL has ?demo=errors, render the showcase instead of the upload UI.
+(function maybeRenderShowcase() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("demo") === "errors") {
+    // Defer until DOM/scripts are ready (this script runs at body end so OK as-is).
+    setTimeout(() => renderShowcase(), 0);
+  }
+})();
+
+// NOTE: <label class="drop"> already opens the file picker natively when clicked,
+// so we do NOT add a click handler — adding one would open the picker twice.
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("drag");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+  // Clear so re-selecting the same file fires `change` again.
+  e.target.value = "";
+});
+
+function showError(msg) {
+  $("#errors").innerHTML = `<div class="err"><strong>Could not parse this file.</strong><br>${escapeHtml(msg)}</div>`;
+}
+
+function handleFile(file) {
+  $("#errors").innerHTML = "";
+  $("#filename").textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array", cellDates: true });
+      CURRENT_FILE = { workbook: wb, filename: file.name, sheetName: wb.SheetNames[0] };
+      // Each new file starts with a clean fix log — fixes don't carry over between files.
+      SESSION_FIXES = [];
+      // Reset the "show full report" override so each new file starts in compact mode if clean.
+      SHOW_FULL_REPORT_FORCED = false;
+      const report = parseWorkbook(wb);
+      render(report);
+    } catch (err) {
+      console.error(err);
+      showError(err.message || String(err));
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+</script>
+</body>
+</html>

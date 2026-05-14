@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — single source of truth for the visual layer.
+ * Inspired by Cal.com's palette and spacing rhythm. Dark-first with a light-mode
+ * variant defined inside [data-theme="light"]. To swap to a different design system
+ * later, edit the values in this file — components downstream consume tokens only.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces */
+  --bg: oklch(0.16 0.01 264);
+  --panel: oklch(0.2 0.012 264);
+  --panel-2: oklch(0.25 0.014 264);
+  --border: oklch(0.3 0.013 264);
+  --border-strong: oklch(0.38 0.012 264);
+
+  /* Text */
+  --text: oklch(0.96 0.005 264);
+  --text-muted: oklch(0.7 0.015 264);
+  --text-subtle: oklch(0.55 0.012 264);
+
+  /* Brand / accent */
+  --accent: oklch(0.7 0.18 230);
+  --accent-strong: oklch(0.62 0.21 232);
+  --accent-fg: oklch(0.16 0.01 264);
+
+  /* Semantic */
+  --good: oklch(0.72 0.18 145);
+  --good-fg: oklch(0.16 0.04 145);
+  --good-bg: oklch(0.22 0.05 145);
+  --bad: oklch(0.66 0.22 25);
+  --bad-fg: oklch(0.16 0.05 25);
+  --bad-bg: oklch(0.22 0.06 25);
+  --warn: oklch(0.78 0.16 75);
+  --warn-fg: oklch(0.18 0.05 75);
+  --warn-bg: oklch(0.22 0.05 75);
+  --info: oklch(0.74 0.13 240);
+  --info-fg: oklch(0.18 0.04 240);
+  --info-bg: oklch(0.22 0.05 240);
+
+  /* Radius scale */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Spacing rhythm (multiplier of 4px) */
+  --space-px: 1px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 10px 30px rgb(0 0 0 / 0.45);
+}
+
+[data-theme="light"] {
+  --bg: oklch(0.99 0.003 264);
+  --panel: oklch(0.97 0.005 264);
+  --panel-2: oklch(0.93 0.008 264);
+  --border: oklch(0.88 0.01 264);
+  --border-strong: oklch(0.78 0.012 264);
+
+  --text: oklch(0.18 0.012 264);
+  --text-muted: oklch(0.42 0.015 264);
+  --text-subtle: oklch(0.55 0.012 264);
+
+  --accent: oklch(0.55 0.22 232);
+  --accent-strong: oklch(0.5 0.24 232);
+  --accent-fg: oklch(0.99 0.003 264);
+
+  --good: oklch(0.5 0.18 145);
+  --good-fg: oklch(0.97 0.04 145);
+  --good-bg: oklch(0.93 0.05 145);
+  --bad: oklch(0.5 0.22 25);
+  --bad-fg: oklch(0.97 0.05 25);
+  --bad-bg: oklch(0.93 0.06 25);
+  --warn: oklch(0.6 0.18 75);
+  --warn-fg: oklch(0.18 0.05 75);
+  --warn-bg: oklch(0.95 0.06 75);
+  --info: oklch(0.55 0.16 240);
+  --info-fg: oklch(0.97 0.04 240);
+  --info-bg: oklch(0.93 0.05 240);
+}
+
+/*
+ * Tell Tailwind about every token so utilities like `bg-panel`, `text-muted`,
+ * `border-strong`, `rounded-lg`, etc. work in JSX.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-good: var(--good);
+  --color-good-fg: var(--good-fg);
+  --color-good-bg: var(--good-bg);
+  --color-bad: var(--bad);
+  --color-bad-fg: var(--bad-fg);
+  --color-bad-bg: var(--bad-bg);
+  --color-warn: var(--warn);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-info-bg: var(--info-bg);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+/* Base */
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Make focus rings visible against the dark UI by default */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
