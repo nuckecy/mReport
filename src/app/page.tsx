@@ -1,15 +1,26 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { LogIn, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { readTenantContextFromHeaders } from "@/lib/tenant";
 
 /**
- * Landing page. Two equal-weight entry points per the Slice 1 plan:
+ * Landing page. Two equal-weight entry points:
  *   - "Upload report" → upload-first; identity is verified after parsing
  *   - "Log in" → identity-first for returning users
  *
- * Both flows are stubs at this stage — wired up across Days 2-5 of Slice 1.
+ * Both flows assume a tenant context. When the visitor lands on the
+ * bare platform domain (or `localhost` in dev), we bounce them to the
+ * workspace picker — `/upload` and `/login` have no meaning without
+ * knowing which tenant to scope to.
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const requestHeaders = await headers();
+  const tenant = readTenantContextFromHeaders(requestHeaders);
+  if (!tenant) {
+    redirect("/workspace");
+  }
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 py-16">
       <div className="mb-10 text-center">

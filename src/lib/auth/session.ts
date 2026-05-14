@@ -67,6 +67,13 @@ export type AppScope = {
 export type GetSessionOptions = {
   /** Default: "mreport". Override for other apps in the same tenant. */
   appSlug?: string;
+  /**
+   * Path to preserve in `?next=` when redirecting to /workspace or /login.
+   * Each protected page passes its own URL — Next 16 middleware header
+   * forwarding to RSCs isn't reliable enough to derive this automatically,
+   * so we make it explicit.
+   */
+  next?: string;
 };
 
 export type PlatformSession = {
@@ -220,8 +227,13 @@ export async function requireAuth(opts: GetSessionOptions = {}): Promise<AppSess
   // if user but no role → /no-access.
   const requestHeaders = await headers();
   const tenant = readTenantContextFromHeaders(requestHeaders);
+  // Path to preserve: caller-supplied, with x-pathname as a fallback.
+  // The fallback path mostly helps in local dev where the bare host has
+  // no caller-supplied value.
+  const path = opts.next ?? requestHeaders.get("x-pathname") ?? "/";
+
   if (!tenant) {
-    redirect("/");
+    redirect(`/workspace?next=${encodeURIComponent(path)}`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -230,7 +242,6 @@ export async function requireAuth(opts: GetSessionOptions = {}): Promise<AppSess
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const path = requestHeaders.get("x-pathname") ?? "/";
     redirect(`/login?next=${encodeURIComponent(path)}`);
   }
 

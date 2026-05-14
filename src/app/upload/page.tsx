@@ -18,7 +18,7 @@ import { UploadDropzone } from "./UploadDropzone";
  * flag uploads from a different parish before the user wastes time submitting.
  */
 export default async function UploadPage() {
-  const session = await requireAuth();
+  const session = await requireAuth({ next: "/upload" });
 
   // Display name for the page header — name from core_users, fallback to email.
   const displayName = session.name ?? session.email ?? "there";
