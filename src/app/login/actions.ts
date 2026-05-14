@@ -35,7 +35,12 @@ export type LoginActionState =
 
 const EmailSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  next: z.string().optional(),
+  // formData.get returns null when the hidden input is missing; Zod 4
+  // distinguishes null from undefined, so accept both.
+  next: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 /**

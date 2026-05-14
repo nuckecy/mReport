@@ -25,7 +25,14 @@ const LookupSchema = z.object({
     // RFC 1035 hostname label, plus our convention that slugs are
     // alphanumeric + hyphen (no leading/trailing hyphen).
     .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/i, "Use letters, digits, and hyphens only."),
-  next: z.string().optional(),
+  // `formData.get("next")` returns null when the hidden input isn't
+  // present (the user landed on /workspace directly without a `?next=`).
+  // Zod 4 treats null as a distinct type from undefined, so we accept
+  // both via .nullish() + map null → undefined for downstream.
+  next: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 export type LookupWorkspaceState =
