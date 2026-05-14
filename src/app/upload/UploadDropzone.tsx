@@ -45,6 +45,7 @@ import { FailureCard } from "@/components/failure/FailureCard";
 import { TemplateBanner } from "@/components/failure/TemplateBanner";
 import { CompactSummary } from "@/components/failure/CompactSummary";
 import { ParsedDetails } from "./ParsedDetails";
+import { ParseErrorCard } from "./ParseErrorCard";
 
 // ── State machine ────────────────────────────────────────────────────
 
@@ -317,27 +318,7 @@ export function UploadDropzone({ authorizedParish, userRole }: UploadDropzonePro
       </label>
 
       {state.kind === "error" ? (
-        <div
-          role="alert"
-          className="bg-bad-bg text-bad flex items-start gap-3 rounded-[var(--radius-md)] p-3 text-sm"
-        >
-          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <div className="flex flex-col gap-1">
-            {state.filename ? (
-              <p className="font-medium">
-                Couldn&rsquo;t parse <span className="font-mono">{state.filename}</span>
-              </p>
-            ) : null}
-            <p>{state.message}</p>
-            <button
-              type="button"
-              className="text-text-muted hover:text-text mt-1 self-start text-xs underline-offset-4 hover:underline"
-              onClick={reset}
-            >
-              Try another file
-            </button>
-          </div>
-        </div>
+        <ParseErrorCard filename={state.filename} rawMessage={state.message} onReset={reset} />
       ) : null}
     </div>
   );
