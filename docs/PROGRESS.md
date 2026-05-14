@@ -9,7 +9,19 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, and 1 complete. Day 2 (auth + middleware) is next.**
+**Slice 1 — Days 0, 0.5, 1, and 2 complete. Day 3 (login UI + session wiring) is next.**
+
+mReport now has full auth plumbing in place:
+- Drizzle ORM + postgres-js connected to the platform DB
+- Schema definitions for `core_*` (mirrored read-only) and `mreport_*` (owned)
+- Tenant resolution via subdomain (`<slug>.localhost` in dev, `<slug>.churchplatform.com` in prod)
+- Supabase server + browser clients
+- `checkAccess` + `isTenantMember` with mReport role vocabulary
+- `getSession({ appSlug: "mreport" })` + `getPlatformSession` + `requireAuth`
+- Next.js middleware running in Node.js runtime, with header sanitization + Supabase session refresh
+- Dev server smoke-tested across bare/tenant/unknown hostnames — all 200
+
+All quality checks green: format, typecheck, lint, build, unit tests.
 
 mReport now has live tables and seed data in the platform's Supabase project:
 - 7 `mreport_*` tables created with RLS enabled
@@ -84,15 +96,39 @@ All quality checks green: format, typecheck, lint, unit tests, build.
 - ⬜ Configure Supabase Storage bucket for original .xlsx uploads (deferred
   to Day 4 when submit flow lands)
 
-### Day 2 — Tenant + auth integration
+### Day 2 — Tenant + auth integration ✅
 
-- ⬜ Add `middleware.ts` modeled after event-calendar's — extract subdomain →
-  resolve tenant → inject `x-tenant-id` / `x-tenant-slug` headers
-- ⬜ Port (don't copy-paste) auth helpers from event-calendar:
-  `src/lib/auth/session.ts` (`getPlatformSession`, `getSession`),
-  `src/lib/auth/access.ts` (`checkAccess`, `requireAuth`)
+- ✅ Read event-calendar's `lib/tenant.ts`, `lib/auth/access.ts`, `lib/auth/session.ts`,
+  `lib/supabase/server.ts`, `lib/supabase/browser.ts`, `middleware.ts`, `db/index.ts`,
+  `db/schema/core.ts`
+- ✅ Installed drizzle-orm + postgres + drizzle-kit
+- ✅ `drizzle.config.ts` (mostly for type generation; we don't generate
+  migrations from Drizzle in Slice 1)
+- ✅ `src/lib/db/index.ts` — Drizzle client with SSL, hot-reload guard
+  (separate global key from event-calendar to avoid collisions)
+- ✅ `src/lib/db/schema/core.ts` — mirrored from event-calendar (read-only)
+- ✅ `src/lib/db/schema/mreport.ts` — Drizzle definitions for `mreport_*` tables
+  (mReport role enum, report status enum, 7 tables with CHECK constraints,
+  unique indexes, FK refs to `core_tenants` + `core_users`)
+- ✅ `src/lib/tenant.ts` — `lookupCustomDomain`, `lookupTenantBySlug`,
+  `lookupPrimaryDomain` (cached 60s with separate cache keys from
+  event-calendar), `readTenantContextFromHeaders` with UUID-shape validation
+- ✅ `src/lib/supabase/server.ts` (replaces Day 0 stub) + `src/lib/supabase/browser.ts`
+- ✅ `src/lib/auth/access.ts` — `checkAccess` with mReport role vocabulary
+  (`super_admin / regional_admin / parish_admin / preparer / platform_admin`),
+  `isTenantMember`
+- ✅ `src/lib/auth/session.ts` — `getSession`, `getPlatformSession`, `requireAuth`,
+  `defaultLandingForRole`; defaults to `appSlug = "mreport"`; populates
+  mReport scope (region/parish) from `mreport_user_scopes` when applicable
+- ✅ `middleware.ts` — full port. Header sanitization, custom domain + subdomain
+  resolution, Supabase session refresh, Node.js runtime declaration
+- ✅ Removed obsolete `experimental.nodeMiddleware` flag (Next 16 makes Node
+  middleware first-class; just declare `runtime: "nodejs"` in middleware config)
+- ✅ Smoke-tested: dev server boots in <300ms; bare/tenant/unknown hostnames
+  all return 200; middleware doesn't crash on DB lookups
 - ⬜ Wire login UI: server action → Supabase Auth → resolve mReport role → redirect
-- ⬜ Wire `/auth/callback` for magic-code redirect-back
+  (Day 3)
+- ⬜ Wire `/auth/callback` for magic-code redirect-back (Day 3)
 
 ### Day 3 — Upload + parse flow (auth-gated)
 
@@ -192,3 +228,4 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** mReport-specific role vocabulary in `core_tenant_user_roles.role` (super_admin / regional_admin / parish_admin / preparer)
 - **2026-05-14** Service-role key shared with event-calendar (same project, only one key allowed); user accepts conversation-isolation risk and declined rotation
 - **2026-05-14** Day 1 applied: 7 mreport_* tables + RLS + mReport registered in core_apps + bootstrap super-admin (nuckecy@gmail.com) on `demo` tenant + 1 region + 3 parishes seeded
+- **2026-05-14** Day 2: Drizzle + tenant + auth + middleware ported from event-calendar (mReport role vocabulary, defaults to appSlug="mreport"); dev server smoke-tested with tenant subdomains; HMR-safe DB client

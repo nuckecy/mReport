@@ -39,6 +39,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // In Next 16, Node.js runtime for middleware is first-class — no
+  // experimental flag needed. The middleware itself declares
+  // `runtime: "nodejs"` in its `config` export. We need Node for Postgres
+  // TCP connections (tenant lookups via Drizzle) and @supabase/ssr session
+  // refresh. See middleware.ts header for rationale.
   async headers() {
     return [
       {
