@@ -9,7 +9,7 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, 1, 2, 3, and 4 complete. Day 5 (submit flow + auto-fix) is next.**
+**Slice 1 — Days 0, 0.5, 1, 2, 3, 4, and 5 complete. Day 6 (admin: members CRUD) is next.**
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -227,19 +227,85 @@ Known follow-ups (filed as future work, not blockers):
 - Rich failure cards (Layout C from the prototype) deferred to Day 5.
 - Auto-fix patcher + Excel/JSON export deferred to Day 5.
 
-### Day 5 — Failure UI + Submit flow
+### Day 5 — Failure UI + Submit flow — ✅ DONE
 
-- ⬜ Rich failure cards (Layout C from prototype) — cell-pill, sub-type chip,
-  Currently/Should-be value pair, probable cause, Fix CTA
-- ⬜ Auto-fix patcher (Statistics only — `forgot-to-total` + cell address known)
-- ⬜ Excel + JSON export of the parsed report
-- ⬜ Server action: validate via Zod, write `mreport_reports` + `mreport_report_lines`,
-  upload .xlsx to Supabase Storage, write `mreport_audit_log` entry
-- ⬜ Email notifications (preparer + parish_admin) — Resend or Supabase email,
-  TBD; check what event-calendar uses
-- ⬜ Duplicate-month resubmission with required amendment note
-- ⬜ Auto-fix flow (in-memory cell patch + re-validate, no re-upload) — Statistics
-  fields only
+Full preparer end-to-end: failure cards, auto-fix patcher, Excel/JSON
+downloads, and server-side submit with Storage + audit log + amendment
+handling.
+
+Failure UI (`src/components/failure/`):
+- ✅ `FailureCard.tsx` — Layout-C card with clickable cell-pill (copy to
+  clipboard), severity-tinted border/bg, sub-type chip, "Currently / Should be"
+  pair, source line (statistics contributors join), probable-cause line for
+  forgot-to-total, auto-fix CTA OR italic review text
+- ✅ `TemplateBanner.tsx` — amber outdated-template variant with parsed
+  rate badges (60% → 55%), structural-issues block, "Get correct template"
+  CTA
+- ✅ `CompactSummary.tsx` — all-clean fast path with 3 checklist rows
+  (monetary/remittance/statistics) + Submit/Show-full CTAs
+
+Auto-fix (`src/lib/parser/autofix.ts`):
+- ✅ `applyPatch` mutates the SheetJS workbook in memory, clears cached
+  display string + formula, returns `AppliedFix` log entry
+- ✅ Guards: cell address required, sheet must exist, calc must be finite
+- ✅ Wired into `UploadDropzone` — fix click → patch → re-parse → re-render
+  → re-serialize bytes for the eventual submit
+
+Downloads (`src/lib/exports/`):
+- ✅ `json.ts` — `downloadReportJSON` + `reportFilename` helper
+- ✅ `xlsx.ts` — 6-sheet workbook (Summary, Per-Date Detail, Weekly Totals,
+  Allocation, Statistics, Sanity) with prototype's column widths
+
+Submit pipeline (`src/lib/submit/`):
+- ✅ Storage bucket `mreport-reports` + 4 RLS policies applied to live DB
+  via `0004_mreport_storage_bucket.sql`. Path: `<tenant>/<parish>/<YYYY-MM>.xlsx`.
+  Policies use a scalar `mreport_user_is_tenant_member(uuid)` wrapper
+  because `user_tenant_ids()` is a SRF and Postgres forbids SRFs in policy
+  expressions (workaround documented in the migration file).
+- ✅ `path.ts` — `reportMonthDate`, `reportMonthSlug`, `storageKey`,
+  `decodeBase64ToBytes` (pure helpers, unit tested)
+- ✅ `types.ts` — `SubmitReportInputSchema` (Zod), `SubmitReportResult`
+  tagged union with `needs_amendment_note` soft-failure
+- ✅ `submitReport.ts` server action — auth via `requireAuth`, Zod parse,
+  re-derive month from report (never trust client), parish-name lookup,
+  parish-mismatch enforcement, duplicate-month detection (returns
+  `needs_amendment_note` if a live submission exists for the same parish
+  + month), Storage upload via SSR client (RLS-gated), Drizzle
+  transaction wrapping mreport_reports insert + mreport_report_lines
+  inserts + status='superseded' on prior live row (on amendment) + 2
+  mreport_audit_log rows (file_uploaded + submitted/amended)
+- ✅ Email masking on audit log (`al***@example.org`) — keeps just enough
+  to identify the actor without storing full PII
+
+UploadDropzone overhaul:
+- ✅ State machine: idle → parsing → parsed → submission states
+  (idle/submitting/success/error/needs_note)
+- ✅ Template-invalid fast path renders only `TemplateBanner`
+- ✅ All-clean fast path renders only `CompactSummary` with Submit CTA
+- ✅ Otherwise renders failure list with per-card auto-fix
+- ✅ Amendment note collected inline when server reports
+  `needs_amendment_note` — user fills note + re-submits
+- ✅ Session fix log card above the failure list ("3 fixes applied this
+  session" with cell + old → new value)
+- ✅ Download Summary (.xlsx) + Download JSON buttons
+
+Tests:
+- ✅ `tests/parser/autofix.test.ts` — 5 tests covering the patch outcome
+  shape, guards (no cell, empty workbook, non-finite calc), preservation
+  of unrelated cell metadata
+- ✅ `tests/submit/path.test.ts` — 9 tests for date/slug/key/base64
+  helpers
+- ✅ `tests/exports.test.ts` — 4 tests for filename builder + workbook
+  sheet structure
+- ✅ All quality checks green: format, typecheck, lint, build, 86 unit
+  tests, 4 Playwright tests
+
+Known follow-ups (Day 6+):
+- Email notifications on submit (preparer + parish_admin) — TBD provider
+- Fix-button per-card disabled state during patching (currently only the
+  submit button shows "Submitting…")
+- Admin members CRUD UI is Day 6
+- Admin reports list + detail with downloadable original .xlsx is Day 7
 
 ### Day 6 — Admin: members CRUD
 
@@ -320,3 +386,4 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** Service-role key shared with event-calendar (same project, only one key allowed); user accepts conversation-isolation risk and declined rotation
 - **2026-05-14** Day 1 applied: 7 mreport_* tables + RLS + mReport registered in core_apps + bootstrap super-admin (nuckecy@gmail.com) on `demo` tenant + 1 region + 3 parishes seeded
 - **2026-05-14** Day 2: Drizzle + tenant + auth + middleware ported from event-calendar (mReport role vocabulary, defaults to appSlug="mreport"); dev server smoke-tested with tenant subdomains; HMR-safe DB client
+- **2026-05-14** Day 5: Storage bucket `mreport-reports` (path `<tenant>/<parish>/<YYYY-MM>.xlsx`), RLS via scalar SRF wrapper (`mreport_user_is_tenant_member`), full Drizzle-tx submit pipeline with amendment handling and audit log

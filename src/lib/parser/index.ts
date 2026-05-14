@@ -19,3 +19,6 @@ export type { TemplateValidity, ValidityIssue, IssueKind } from "./template-vali
 
 export { excelDateToJS, parseStringDate, ymd, detectMonthYear } from "./dates";
 export { NUM, round2 } from "./num";
+
+export { applyPatch } from "./autofix";
+export type { AppliedFix, PatchOutcome } from "./autofix";
