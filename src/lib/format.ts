@@ -35,6 +35,20 @@ export function fmtSmart(n: number | null | undefined): string {
     : num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+/**
+ * Natural-language list join.
+ *
+ *   ["a"]           → "a"
+ *   ["a", "b"]      → "a and b"
+ *   ["a", "b", "c"] → "a, b, and c"
+ */
+export function friendlyJoin(items: string[]): string {
+  if (!items || items.length === 0) return "";
+  if (items.length === 1) return items[0]!;
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
+}
+
 /** YYYY-MM-DD → "April 11" (full month name, no zero-padding). */
 export function formatLongDate(yyyymmdd: string | null | undefined): string | null {
   if (!yyyymmdd) return null;

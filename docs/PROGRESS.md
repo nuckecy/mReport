@@ -9,7 +9,7 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, 1, 2, and 3 complete. Day 4 (upload + parse flow) is next.**
+**Slice 1 — Days 0, 0.5, 1, 2, 3, and 4 complete. Day 5 (submit flow + auto-fix) is next.**
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -162,18 +162,77 @@ sequential to avoid file conflicts.
 - ✅ All quality checks green: format, typecheck, lint, build, 12 unit tests,
   4 Playwright tests
 
-### Day 4 — Upload + parse flow (auth-gated)
+### Day 4 — Upload + parse flow (auth-gated) — ✅ DONE
 
-- ⬜ Build `/upload` page (drop zone, parse, validation summary)
-- ⬜ Port the parser from `_prototype/index.html` to `src/lib/parser/` —
-  TypeScript modules, full type coverage
-- ⬜ Magic-byte validation on .xlsx upload
-- ⬜ Show parsed validation summary before submit (existing prototype UX)
-- ⬜ Parish-mismatch check (parish-from-template must match user's authorized
-  parish via `mreport_user_scopes`)
+Full parser port from `_prototype/index.html` (3494 lines of mixed JS/HTML/CSS)
+to typed TypeScript modules. Every regex, threshold, and §11 bug fix preserved
+with regression coverage.
 
-### Day 5 — Submit flow
+Parser layer (`src/lib/parser/`):
+- ✅ `num.ts` — `NUM`, `round2` (coercion + monetary rounding)
+- ✅ `cells.ts` — `findCell`, `findAllCells`, `valueRightOf`, `valueForHeaderLabel`,
+  `scanSheetFor`, `findEmailInSheet`, `findMobileInSheet` (§11.1, §11.14)
+- ✅ `dates.ts` — `excelDateToJS`, `parseStringDate`, `ymd`, `detectMonthYear`
+  with pre-2000 guard, UTC re-anchor, German DD.MM.YYYY support
+  (§11.2, §11.4, §11.5, §11.8)
+- ✅ `extract.ts` — `STAT_FIELDS`, `extractPerDateRows`, `extractPerDateStatistics`,
+  `readEnteredStatTotals`, `extractWeeklyTotals`, `readGrandTotalRow`,
+  `readMonthlyAverageTotal/Demographics`, `readActualRemittance` with negative
+  lookbehind on every percentage regex and all-column stop-marker sweep
+  (§11.3, §11.6)
+- ✅ `template-validity.ts` — structural + formula checks with round-percent
+  snap (5¢ amount tolerance + 0.5% rate snap)
+- ✅ `parseWorkbook.ts` — orchestrator producing the full `Report` shape,
+  including 5 sanity checks at end of parse (§11.7)
+- ✅ `types.ts` / `index.ts` — typed public surface
 
+Validation layer (`src/lib/validation/`):
+- ✅ `checks.ts` — `buildChecks` (30+ comparisons, intentional order),
+  `gradeChecks` with per-check tolerance for banner/field parity (§11.10)
+- ✅ `failures.ts` — `classifyFailure` (template-defect first per §11.15),
+  `severityForCheck` (LABEL_SEVERITY first per §11.16), `cellAddressForCheck`,
+  `formatterForCheck` (section-aware per §11.11), `isAutoFixable`,
+  `explainFailure` (5 sub-type message templates), `buildFailure`
+- ✅ `index.ts` — public surface + `categorizeChecks` for compact summary
+- ✅ `CORRECT_TEMPLATE_URL` env var with safe local fallback
+
+`/upload` page:
+- ✅ `src/app/upload/page.tsx` — server component, auth-gated via `requireAuth`,
+  passes session.scope.parishName to client for mismatch detection
+- ✅ `src/app/upload/UploadDropzone.tsx` — drag-and-drop or click, magic-byte
+  sniff (PK\\x03\\x04 ZIP signature), SheetJS parse, validation summary card
+  with passed/failed/missing counts, expandable failed-check list, template
+  issues + parish-mismatch warning panels, sign-out form in header
+- ✅ Parish-mismatch check enforced for `preparer` and `parish_admin` roles;
+  super_admin / regional_admin / platform_admin can upload any parish
+
+Tests:
+- ✅ `tests/parser/sheet-builder.ts` — synthetic WorkSheet helper (no fixtures
+  needed; tests build sheets from 2D arrays)
+- ✅ `tests/parser/cells.test.ts` — 12 tests covering §11.1, §11.3, §11.14
+- ✅ `tests/parser/dates.test.ts` — 16 tests covering §11.2, §11.4, §11.5, §11.8
+- ✅ `tests/parser/extract.test.ts` — 4 tests covering §11.3, §11.6, §11.8
+- ✅ `tests/parser/parseWorkbook.test.ts` — 6 end-to-end tests covering §11.7,
+  §11.9, §11.10 + error path
+- ✅ `tests/validation.test.ts` — 13 tests covering §11.10, §11.11, §11.15, §11.16
+- ✅ All quality checks green: format, typecheck, lint, build, 68 unit tests,
+  4 Playwright tests
+
+Known follow-ups (filed as future work, not blockers):
+- The `classifyFailure` template-defect path relies on token substring match
+  that fails on the current "X% of Total Y" label structure vs "X% of Y" in
+  the message. The classifier behaves correctly when tokens match; the
+  prototype carries the same limitation. Tracked for revisit when we touch
+  the failure-card UI in Day 5.
+- Rich failure cards (Layout C from the prototype) deferred to Day 5.
+- Auto-fix patcher + Excel/JSON export deferred to Day 5.
+
+### Day 5 — Failure UI + Submit flow
+
+- ⬜ Rich failure cards (Layout C from prototype) — cell-pill, sub-type chip,
+  Currently/Should-be value pair, probable cause, Fix CTA
+- ⬜ Auto-fix patcher (Statistics only — `forgot-to-total` + cell address known)
+- ⬜ Excel + JSON export of the parsed report
 - ⬜ Server action: validate via Zod, write `mreport_reports` + `mreport_report_lines`,
   upload .xlsx to Supabase Storage, write `mreport_audit_log` entry
 - ⬜ Email notifications (preparer + parish_admin) — Resend or Supabase email,

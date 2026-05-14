@@ -40,3 +40,11 @@ export const TOLERANCE = {
   templateRateAmount: 0.05,
   templateRateSnap: 0.005,
 } as const;
+
+/**
+ * URL of the canonical template. Set in `.env.local` as
+ * `NEXT_PUBLIC_TEMPLATE_URL`; fallback used during local development so
+ * the outdated-template banner CTA still renders something.
+ */
+export const CORRECT_TEMPLATE_URL =
+  process.env.NEXT_PUBLIC_TEMPLATE_URL ?? "https://example.com/parish-report-template";

@@ -1,68 +1,35 @@
-/**
- * Type contracts for the parser layer. The full Report shape mirrors the JSON
- * export documented in `_prototype/EXTRACTED-SPEC.md` §9.
- *
- * Implementation arrives Day 4 — porting `parseWorkbook` and helpers from the
- * prototype, broken into typed modules.
- */
+// Public type re-exports for the parser layer.
+//
+// The actual types live alongside the implementation (`parseWorkbook.ts`,
+// `extract.ts`, `template-validity.ts`). This file exists only as a stable
+// import surface and to keep `export type *` patterns simple for callers
+// that want everything in one place.
 
-export type SeverityLevel = "ok" | "warn" | "fail";
+export type {
+  Report,
+  SanityCheck,
+  MonthlyValidation,
+  MonthlyValidationEntry,
+  WeeklyTotal,
+  AllocationReconciliation,
+  StatisticsValidation,
+} from "./parseWorkbook";
+
+export type { PerDateRow, PerDateStatRow, StatKey, StatField } from "./extract";
+
+export type { TemplateValidity, ValidityIssue, IssueKind } from "./template-validity";
+
+/**
+ * Severity levels. `ok / warn / fail` are used by sanity checks; failure
+ * cards also use `info` for neutral / low-priority notices (see prototype
+ * design tokens §10.2). The combined union covers both surfaces.
+ */
+export type SeverityLevel = "ok" | "warn" | "fail" | "info";
+
+/** Failure sub-types produced by classifyFailure (validation layer). */
 export type FailureSubType =
   | "forgot-to-total"
   | "wrong-arithmetic"
   | "wrong-allocation"
   | "missing-entry"
   | "template-defect";
-
-export interface SourceInfo {
-  sheet: string;
-  parish: string | null;
-  pastor: string | null;
-  mobile: string | null;
-  email: string | null;
-  reportMonth: string;
-  monthIndex: number | null;
-  year: number | null;
-}
-
-export interface ParishRecords {
-  averageAttendance: number | null;
-  totalOffering: number;
-  totalTithe: number;
-  totalThanksgiving: number;
-  totalOthers: number;
-  sum: number;
-}
-
-export interface PerDateRow {
-  row: number;
-  day: string;
-  date: string | null;
-  hasAttendance: boolean;
-  hasMoney: boolean;
-  attendance: {
-    men: number;
-    women: number;
-    children: number;
-    totalReported: number | null;
-    totalCalculated: number;
-    validated: boolean | null;
-  };
-  money: {
-    offering: number;
-    tithe: number;
-    thanksgiving: number;
-    others: number;
-    totalReported: number | null;
-    totalCalculated: number;
-    validated: boolean | null;
-  };
-}
-
-// More types added as parser modules land.
-export interface Report {
-  source: SourceInfo;
-  parishRecords: ParishRecords;
-  perDate: PerDateRow[];
-  // … placeholder; full shape filled in alongside the parser port.
-}
