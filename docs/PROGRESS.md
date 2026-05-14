@@ -9,7 +9,7 @@
 
 ## Where we are right now
 
-**Slice 1 — Days 0, 0.5, 1, 2, 3, 4, and 5 complete. Day 6 (admin: members CRUD) is next.**
+**Slice 1 — Days 0, 0.5, 1, 2, 3, 4, 5, and 6 complete. Day 7 (admin: reports list + detail) is next.**
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -307,11 +307,86 @@ Known follow-ups (Day 6+):
 - Admin members CRUD UI is Day 6
 - Admin reports list + detail with downloadable original .xlsx is Day 7
 
-### Day 6 — Admin: members CRUD
+### Day 6 — Admin: members CRUD — ✅ DONE
 
-- ⬜ `/admin/members` page — list, add, edit, deactivate
-- ⬜ Role + parish/region assignment (writes to `core_tenant_user_roles` + `mreport_user_scopes`)
-- ⬜ Scoped by viewer's role (RLS-enforced, not just UI)
+`/admin/members` for super_admin / platform_admin. Invite, edit role + scope,
+deactivate. Every action audited.
+
+Scope decision: Day 6 gated to super_admin/platform_admin only. Scoped
+admin surfaces (regional_admin = members in their region, parish_admin =
+preparers in their parish) are deferred to Day 6.5/7 once we have the
+report-detail UI to anchor them.
+
+Auth + clients (`src/lib/auth/admin.ts`, `src/lib/supabase/admin.ts`):
+- ✅ `requireAdmin()` — redirects to /login or /no-access; allows
+  `super_admin` + `platform_admin`. `isAdminRole(role)` exported as
+  pure predicate for UI use.
+- ✅ `createSupabaseAdminClient()` — service-role-keyed client, cached,
+  server-only. Used by the invite action for Supabase Auth admin API
+  (`listUsers`, `createUser`). Loud warning in comments about scope.
+
+Schemas (`src/lib/members/schemas.ts`):
+- ✅ Lives separate from `actions.ts` so tests can import without
+  pulling in Drizzle + admin Supabase client.
+- ✅ `InviteMemberSchema` with `superRefine` cross-field rules:
+  super_admin rejects scope, every other role requires exactly one
+  of region/parish. Email normalized (trim+lowercase). Names trimmed.
+- ✅ `UpdateRoleSchema`, `UpdateScopeSchema`, `DeactivateMemberSchema`
+- ✅ `MemberActionResult` tagged union with reason codes
+
+Queries (`src/lib/members/queries.ts`):
+- ✅ `listMembers(tenantId)` — joins core_users + core_tenant_users +
+  core_tenant_user_roles (mreport app) + mreport_user_scopes +
+  mreport_regions + mreport_parishes. Sorted by display name.
+- ✅ `listScopeOptions(tenantId)` — flat array of regions + parishes
+  for the invite/edit form's scope select.
+
+Actions (`src/lib/members/actions.ts`, `"use server"`):
+- ✅ `inviteMemberAction` — list/create Supabase Auth user → upsert
+  core_users + core_tenant_users + core_tenant_user_roles → upsert
+  or clear mreport_user_scopes (cleared on super_admin) → audit log.
+  Guards: existing active membership returns `already_member`. Wraps
+  the DB ops in a single Drizzle transaction.
+- ✅ `updateRoleAction` — upsert role on core_tenant_user_roles;
+  drops scope row when promoting to super_admin; refuses self-modify.
+- ✅ `updateScopeAction` — upsert mreport_user_scopes; refuses if both
+  or neither set (matches the SQL CHECK).
+- ✅ `deactivateMemberAction` — soft-delete via
+  core_tenant_users.status='deactivated'; refuses self-modify.
+- ✅ Every action calls `revalidatePath('/admin/members')` on success
+  + writes a `mreport_audit_log` row with masked actor email + IP +
+  user-agent summary.
+
+UI:
+- ✅ `/admin/layout.tsx` — `requireAdmin()` gates the entire `/admin/*`
+  tree; minimal nav (just Members for now)
+- ✅ `/admin/members/page.tsx` — server component; fetches members +
+  scope options in parallel; renders MembersTable
+- ✅ `MembersTable.tsx` — token-driven table with role badge, scope,
+  status badge, Edit + Deactivate per row; inline feedback banner;
+  modal dialogs for Invite / Edit / Deactivate (DialogShell helper,
+  closes on backdrop click); scope select grouped by Regions / Parishes
+- ✅ Self-modify guards in the UI (disabled Deactivate for the current
+  user, role/scope changes still allowed — actions enforce too)
+
+Tests:
+- ✅ 16 unit tests for the Zod schemas (cross-field branches,
+  normalization, invalid emails/names, role transitions, scope
+  combinations)
+- ✅ Bug found + fixed: Zod 4 enforces strict UUID v1-v8 patterns;
+  test fixtures updated from `11111111-...` to real v4-shaped UUIDs
+- ✅ All quality checks green: format, typecheck, lint, build, 102
+  unit tests, 4 Playwright tests
+
+Known follow-ups (Day 7+):
+- Regional/parish-admin scoped admin surfaces (Day 6.5 or alongside
+  Day 7 reports list)
+- Email invite notification (currently we create the auth.users row
+  but don't send a magic link automatically — they have to log in
+  with the email/magic-link flow themselves)
+- Pagination on listUsers (Day 6 scans the first 200; fine until
+  any tenant approaches that limit)
+- Replace the inline modal dialogs with a proper Dialog primitive
 
 ### Day 7 — Admin: reports list + detail
 
@@ -387,3 +462,4 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** Day 1 applied: 7 mreport_* tables + RLS + mReport registered in core_apps + bootstrap super-admin (nuckecy@gmail.com) on `demo` tenant + 1 region + 3 parishes seeded
 - **2026-05-14** Day 2: Drizzle + tenant + auth + middleware ported from event-calendar (mReport role vocabulary, defaults to appSlug="mreport"); dev server smoke-tested with tenant subdomains; HMR-safe DB client
 - **2026-05-14** Day 5: Storage bucket `mreport-reports` (path `<tenant>/<parish>/<YYYY-MM>.xlsx`), RLS via scalar SRF wrapper (`mreport_user_is_tenant_member`), full Drizzle-tx submit pipeline with amendment handling and audit log
+- **2026-05-14** Day 6: members admin gated to super_admin/platform_admin (regional/parish-admin scoping deferred to Day 6.5/7); Zod schemas in their own module so unit tests don't pull in Drizzle; Supabase admin client (service-role) wrapped + cached server-side
