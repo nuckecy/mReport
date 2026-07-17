@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { fmt, fmtCount, fmtInt, fmtSmart, formatLongDate } from "@/lib/format";
 
 describe("format helpers", () => {
-  it("fmt: always 2 decimals, locale grouping", () => {
-    expect(fmt(1070)).toBe("1,070.00");
-    expect(fmt(0)).toBe("0.00");
+  it("fmt: euro currency with 2 decimals, locale grouping", () => {
+    expect(fmt(1070)).toBe("€1,070.00");
+    expect(fmt(0)).toBe("€0.00");
     expect(fmt(null)).toBe("—");
   });
 

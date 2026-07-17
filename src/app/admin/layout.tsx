@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileSpreadsheet, Globe, LogOut, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signOutAction } from "@/lib/auth/actions";
 import { requireAdmin } from "@/lib/auth/admin";
 
@@ -34,6 +35,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
         <div className="flex items-center gap-3">
           <span className="text-text-muted hidden text-xs sm:inline">{displayName}</span>
+          <ThemeToggle />
           <form action={signOutAction}>
             <Button type="submit" variant="ghost" size="sm">
               <LogOut className="size-4" aria-hidden="true" />

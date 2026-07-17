@@ -128,9 +128,9 @@ export function FailureCard({ failure, idx, report, onFix, fixing }: FailureCard
 
       {/* Currently / Should-be */}
       <dl className="mb-3 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 text-sm">
-        <dt className="text-text-subtle text-xs tracking-wide uppercase">Currently</dt>
+        <dt className="text-text-subtle text-xs font-medium">Currently</dt>
         <dd className="text-text font-mono">{currentValue}</dd>
-        <dt className="text-text-subtle text-xs tracking-wide uppercase">Should be</dt>
+        <dt className="text-text-subtle text-xs font-medium">Should be</dt>
         <dd className="flex flex-wrap items-baseline gap-2">
           <span className="text-text font-mono font-semibold">{correctValue}</span>
           <span className="text-text-muted text-xs">{sourceText}</span>

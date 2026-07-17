@@ -2,51 +2,66 @@
 
 /*
  * Design tokens — single source of truth for the visual layer.
- * Inspired by Cal.com's palette and spacing rhythm. Dark-first with a light-mode
- * variant defined inside [data-theme="light"]. To swap to a different design system
- * later, edit the values in this file — components downstream consume tokens only.
+ *
+ * Stripe-inspired theme. Cool, precise, confident. White surfaces with
+ * Stripe-navy ink (#0A2540, not pure black — has just enough blue to
+ * read as "designed" rather than "wireframe"). Stripe indigo (#635BFF)
+ * as the chromatic accent — used confidently for primary CTAs, never
+ * the muted-ink pattern of the previous Cal-Readwise theme. Saturated
+ * but not neon feedback colors. Hairline borders carry elevation more
+ * than shadows do.
+ *
+ * Two modes: light (default, pure white) and dark (cool blue-tinted
+ * dark, Stripe's internal product palette). Both modes share token
+ * names — only values change — so component code is theme-agnostic.
+ *
+ * Dark vs light is selected via the `data-mode` attribute on <html>,
+ * written by an inline init script in <head> before React hydrates so
+ * there's no flash of the wrong theme. Default is `prefers-color-scheme`.
  */
 
 :root,
-[data-theme="dark"] {
-  /* Surfaces */
-  --bg: oklch(0.16 0.01 264);
-  --panel: oklch(0.2 0.012 264);
-  --panel-2: oklch(0.25 0.014 264);
-  --border: oklch(0.3 0.013 264);
-  --border-strong: oklch(0.38 0.012 264);
+[data-mode="light"] {
+  /* Surfaces — pure white, cool off-white recessed.
+     `--panel` matches `--bg` because Stripe distinguishes cards by
+     border, not by fill. */
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f6f9fc;
+  --border: #e3e8ee;
+  --border-strong: #c1c9d2;
 
-  /* Text */
-  --text: oklch(0.96 0.005 264);
-  --text-muted: oklch(0.7 0.015 264);
-  --text-subtle: oklch(0.55 0.012 264);
+  /* Ink — Stripe navy, not pure black */
+  --text: #0a2540;
+  --text-muted: #425466;
+  --text-subtle: #697386;
 
-  /* Brand / accent */
-  --accent: oklch(0.7 0.18 230);
-  --accent-strong: oklch(0.62 0.21 232);
-  --accent-fg: oklch(0.16 0.01 264);
+  /* Action — Stripe indigo. Confidently chromatic. */
+  --accent: #635bff;
+  --accent-strong: #5851ea;
+  --accent-fg: #ffffff;
 
-  /* Semantic */
-  --good: oklch(0.72 0.18 145);
-  --good-fg: oklch(0.16 0.04 145);
-  --good-bg: oklch(0.22 0.05 145);
-  --bad: oklch(0.66 0.22 25);
-  --bad-fg: oklch(0.16 0.05 25);
-  --bad-bg: oklch(0.22 0.06 25);
-  --warn: oklch(0.78 0.16 75);
-  --warn-fg: oklch(0.18 0.05 75);
-  --warn-bg: oklch(0.22 0.05 75);
-  --info: oklch(0.74 0.13 240);
-  --info-fg: oklch(0.18 0.04 240);
-  --info-bg: oklch(0.22 0.05 240);
+  /* Feedback — Stripe's product palette: saturated text, soft tinted bg */
+  --good: #0a875a;
+  --good-fg: #ffffff;
+  --good-bg: #f1f8f4;
+  --bad: #cd3500;
+  --bad-fg: #ffffff;
+  --bad-bg: #fdedea;
+  --warn: #c45403;
+  --warn-fg: #ffffff;
+  --warn-bg: #fdf2e9;
+  --info: #0070f3;
+  --info-fg: #ffffff;
+  --info-bg: #eef6ff;
 
-  /* Radius scale */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-pill: 999px;
+  /* Radius — tighter than Cal-Readwise. Stripe is sharper. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 9999px;
 
   /* Spacing rhythm (multiplier of 4px) */
   --space-px: 1px;
@@ -60,39 +75,48 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
-  --shadow-lg: 0 10px 30px rgb(0 0 0 / 0.45);
+  /* Shadows — navy-tinted, not pure black. One of the details that
+     separates Stripe from "generic clean SaaS." */
+  --shadow-sm: 0 1px 2px rgb(10 37 64 / 0.04);
+  --shadow-md: 0 4px 12px rgb(10 37 64 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(10 37 64 / 0.12);
 }
 
-[data-theme="light"] {
-  --bg: oklch(0.99 0.003 264);
-  --panel: oklch(0.97 0.005 264);
-  --panel-2: oklch(0.93 0.008 264);
-  --border: oklch(0.88 0.01 264);
-  --border-strong: oklch(0.78 0.012 264);
+[data-mode="dark"] {
+  /* Cool blue-tinted dark, Stripe's internal product variant */
+  --bg: #0a0b1f;
+  --panel: #1a1b36;
+  --panel-2: #252740;
+  --border: #2e3052;
+  --border-strong: #424566;
 
-  --text: oklch(0.18 0.012 264);
-  --text-muted: oklch(0.42 0.015 264);
-  --text-subtle: oklch(0.55 0.012 264);
+  --text: #e0e5ec;
+  --text-muted: #8c93a8;
+  --text-subtle: #6b7390;
 
-  --accent: oklch(0.55 0.22 232);
-  --accent-strong: oklch(0.5 0.24 232);
-  --accent-fg: oklch(0.99 0.003 264);
+  /* Indigo lifts slightly so it pops on dark navy */
+  --accent: #7a73ff;
+  --accent-strong: #635bff;
+  --accent-fg: #ffffff;
 
-  --good: oklch(0.5 0.18 145);
-  --good-fg: oklch(0.97 0.04 145);
-  --good-bg: oklch(0.93 0.05 145);
-  --bad: oklch(0.5 0.22 25);
-  --bad-fg: oklch(0.97 0.05 25);
-  --bad-bg: oklch(0.93 0.06 25);
-  --warn: oklch(0.6 0.18 75);
-  --warn-fg: oklch(0.18 0.05 75);
-  --warn-bg: oklch(0.95 0.06 75);
-  --info: oklch(0.55 0.16 240);
-  --info-fg: oklch(0.97 0.04 240);
-  --info-bg: oklch(0.93 0.05 240);
+  /* Same hue family, lifted for contrast on cool dark */
+  --good: #3ecf8e;
+  --good-fg: #052e1c;
+  --good-bg: #0f2a1f;
+  --bad: #ff6d4a;
+  --bad-fg: #2a0a02;
+  --bad-bg: #2e1410;
+  --warn: #ffa940;
+  --warn-fg: #2a1505;
+  --warn-bg: #2e2010;
+  --info: #4090ff;
+  --info-fg: #02152e;
+  --info-bg: #0f1f2e;
+
+  /* Heavier shadows on dark to keep elevation perceptible */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.45);
 }
 
 /*
@@ -131,8 +155,16 @@
   --radius-xl: var(--radius-xl);
   --radius-pill: var(--radius-pill);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  /* Tailwind utility → CSS-var bridges:
+     - font-sans   → Inter (UI / body / display)        via --font-body
+     - font-mono   → JetBrains Mono (numerics, tabular) via --font-mono-family
+     - font-serif  → falls back to ui-serif; Stripe doesn't use a serif
+                     for display, so we don't load one. Kept defined so
+                     accidental `font-serif` uses don't break visually.
+     Each --font-* variable is injected by next/font in layout.tsx. */
+  --font-sans: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: ui-serif, Georgia, serif;
+  --font-mono: var(--font-mono-family), ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
 /* Base */
@@ -149,7 +181,9 @@ body {
   border-color: var(--border);
 }
 
-/* Make focus rings visible against the dark UI by default */
+/* Focus rings — Stripe indigo, 2px, generous offset so they don't
+   look pinched against the element. Works in both modes since accent
+   is defined for both. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

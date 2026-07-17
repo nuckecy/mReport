@@ -15,8 +15,15 @@ admin flow, and verification deliverables are all live. See
 [`SECURITY_AUDIT_REPORT.md`](../SECURITY_AUDIT_REPORT.md) for the security
 sign-off.
 
-Next milestones (Slice 1.5 / Slice 2) are tracked at the bottom of this
-file under "Deferred to Slice 1.5 / Slice 2".
+**Slice 1.5 is IN PROGRESS.** Three pieces have landed on top of Slice 1:
+the workspace picker for bare-host visitors (committed), the `/admin/region`
+cross-parish rollup with multi-month picker + xlsx export (committed), and
+a Stripe-inspired light/dark theme rebrand with a 3-state ThemeToggle
+(in the working tree, not yet committed). Details under "Slice 1.5:
+in progress" below. Remaining Slice 1.5 milestones are tracked at the
+bottom under "Deferred to Slice 1.5 / Slice 2".
+
+Current test count: **134 unit tests + 9 Playwright tests**, all green.
 
 mReport now has full auth plumbing in place:
 - Drizzle ORM + postgres-js connected to the platform DB
@@ -497,10 +504,84 @@ file) are flagged as out-of-scope for code work.
 
 ---
 
+## Slice 1.5: in progress
+
+Work layered on top of the signed-off Slice 1. Each item below has
+shipped to the tree; commit status is noted per entry.
+
+### Workspace picker for bare-host visitors: ✅ DONE (commit `9326bea`)
+
+When a user hits the platform domain (or bare `localhost` in dev) with
+no tenant context, they need a way to choose which workspace to act on.
+
+- ✅ `src/app/workspace/page.tsx`: server component; redirects to `/`
+  when a tenant subdomain is already resolved (picker adds nothing there),
+  otherwise renders the picker
+- ✅ `src/app/workspace/WorkspacePickerForm.tsx`: client form taking a
+  workspace slug
+- ✅ `src/app/workspace/actions.ts` + `host.ts`: resolve the entered slug
+  to a tenant subdomain and redirect there
+- ✅ Follow-up (commit `e0f159f`): fixed a Zod 4 null-vs-undefined
+  mismatch on the form's `next` field
+
+### `/admin/region` cross-parish rollup: ✅ DONE (commit `6b4197c`)
+
+A tenant-wide view that aggregates parish reports across up to three
+months, with xlsx export. Partially fulfils the "aggregate dashboards"
+item that was previously parked in Slice 2.
+
+- ✅ `src/lib/region/queries.ts`: `getRegionRollup` (per-month,
+  per-parish aggregation), `getDefaultMonths`, `listAvailableMonths`
+- ✅ `src/lib/region/totals.ts`: `sumTotals` pure reducer over summable
+  report rows (unit tested)
+- ✅ `src/lib/region/xlsx.ts`: `buildRegionWorkbook` +
+  `downloadRegionWorkbook` (multi-month rollup export)
+- ✅ `src/app/admin/region/page.tsx`: server component; parses the
+  `?months=` query (max 3, malformed dropped), fetches rollups +
+  available months + tenant name in parallel
+- ✅ `src/app/admin/region/RegionView.tsx`: client view with the
+  multi-month picker and rollup tables
+- ✅ Region tab added to the admin nav (`src/app/admin/layout.tsx`)
+
+### Stripe-inspired light/dark theme rebrand: 🟡 IN TREE (uncommitted)
+
+Replaces the Cal.com-inspired dark-first palette with a Stripe-inspired
+system: white surfaces + navy ink + indigo accent in light mode, cool
+blue-tinted dark mode. Both modes share token names so component code
+stays theme-agnostic. This is a visual-only change, with no feature or
+data-flow changes.
+
+- 🟡 `src/app/globals.css`: every design token rewritten (OKLCH to
+  hex Stripe palette; `[data-theme]` selectors became `[data-mode]`;
+  tighter radii; navy-tinted shadows). Light is the default; dark +
+  system are opt-in.
+- 🟡 `src/components/theme/ThemeToggle.tsx`: 3-state toggle
+  (light → dark → system) via `useSyncExternalStore`; multi-tab sync via
+  the `storage` event + a custom change event; follows OS changes live
+  while in "system"
+- 🟡 `src/app/layout.tsx`: inline FOUC-prevention init script in
+  `<head>` (reads `localStorage`/`prefers-color-scheme`, sets
+  `data-mode` before React hydrates; `suppressHydrationWarning` on
+  `<html>`); fonts switched to Inter (body/UI) + JetBrains Mono (numerics)
+- 🟡 `src/app/upload/ParsedDetails.tsx` → moved to
+  `src/components/report/ParsedDetails.tsx`
+- 🟡 Restyle pass across upload, admin/region, failure cards, and the
+  reports detail/list surfaces to the new tokens
+- ✅ Quality gates green in this state: typecheck clean, 134 unit tests
+  passing
+- ⬜ Not yet committed; CSP note: the inline init script relies on
+  `'unsafe-inline'` for scripts (already permitted by the current CSP).
+  Dropping `unsafe-inline` later (Slice 2 nonce-based CSP) will require
+  giving this script a nonce.
+
+---
+
 ## Deferred to Slice 1.5 / Slice 2
 
 - Google Drive sync (Slice 1.5)
-- Aggregate dashboards (regional totals, trends) — Slice 2
+- Aggregate dashboards (regional totals, trends), Slice 2.
+  ~~Partially shipped~~: `/admin/region` cross-parish rollup landed in
+  Slice 1.5 (commit `6b4197c`). Remaining: trends over time, charts.
 - Audit log viewer UI — Slice 2 (data is captured day one)
 - Per-tenant canonical-rule overrides via `mreport_tenant_settings` — Slice 2+
 - GDPR Art. 15 / Art. 17 endpoints (data access + erasure) — Slice 1.5
@@ -558,3 +639,6 @@ Each entry: short title + one-line summary + date. Full reasoning lives in `ARCH
 - **2026-05-14** Day 6: members admin gated to super_admin/platform_admin (regional/parish-admin scoping deferred to Day 6.5/7); Zod schemas in their own module so unit tests don't pull in Drizzle; Supabase admin client (service-role) wrapped + cached server-side
 - **2026-05-14** Day 7: filterable reports list + detail with audit trail; signed-URL download (60s TTL) re-derives the storage key from the DB row and audits `report.file_downloaded` on success; URL-state-driven filters via `useRouter().push`; filters helper extracted to its own module for test isolation
 - **2026-05-14** Day 8 — Slice 1 sign-off: SECURITY_AUDIT_REPORT covers auth/RLS/storage/audit/CSP; README + CHANGELOG rewrites; protected-routes E2E (`/upload`, `/admin/*`, `/no-access` redirect behaviors)
+- **2026-05-14** Slice 1.5: workspace picker for bare-host visitors (`/workspace`); redirects to `/` when a tenant subdomain is already resolved, resolves an entered slug to a tenant subdomain otherwise (commit `9326bea`)
+- **2026-05-14** Slice 1.5: `/admin/region` cross-parish rollup; multi-month picker (max 3, `?months=` URL state), `sumTotals` pure reducer, xlsx export; partially fulfils the Slice 2 aggregate-dashboards item (commit `6b4197c`)
+- **2026-06-06** Slice 1.5: theme rebrand from Cal.com dark-first to Stripe-inspired light/dark; `[data-theme]` → `[data-mode]`, hex tokens, 3-state ThemeToggle, inline FOUC-prevention init script; visual-only, shared token names keep components theme-agnostic; **in tree, not yet committed** (see ARCHITECTURE.md §15)

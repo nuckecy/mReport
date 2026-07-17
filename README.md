@@ -28,7 +28,7 @@ What ships in Slice 1:
   per-report detail with audit trail + signed-URL download of the original
   file; `/admin/members` for invite / role + scope edit / deactivate.
 - **Validation**: 30+ canonical checks, 16 documented bug-fix regressions from
-  the prototype covered by 110 unit tests; outdated-template detection.
+  the prototype covered by 134 unit tests; outdated-template detection.
 
 The single-file HTML prototype that informed this build is frozen in
 [`_prototype/`](./_prototype/). The

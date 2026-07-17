@@ -75,7 +75,7 @@ export function TemplateBanner({ validity, onReset }: TemplateBannerProps) {
 
         {formulaCount > 0 ? (
           <div className="bg-panel border-border mt-5 rounded-[var(--radius-md)] border p-4">
-            <p className="text-text-muted text-xs font-medium tracking-wide uppercase">
+            <p className="text-text-muted text-xs font-medium">
               Formula errors detected
             </p>
             <ul className="mt-3 space-y-3">
@@ -107,7 +107,7 @@ export function TemplateBanner({ validity, onReset }: TemplateBannerProps) {
 
         {structuralCount > 0 ? (
           <div className="bg-panel border-border mt-3 rounded-[var(--radius-md)] border p-4">
-            <p className="text-text-muted text-xs font-medium tracking-wide uppercase">
+            <p className="text-text-muted text-xs font-medium">
               Structural issues
             </p>
             <ul className="mt-3 space-y-2">

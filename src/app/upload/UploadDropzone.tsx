@@ -44,7 +44,7 @@ import type { SubmitReportResult } from "@/lib/submit";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { TemplateBanner } from "@/components/failure/TemplateBanner";
 import { CompactSummary } from "@/components/failure/CompactSummary";
-import { ParsedDetails } from "./ParsedDetails";
+import { ParsedDetails } from "@/components/report/ParsedDetails";
 import { ParseErrorCard } from "./ParseErrorCard";
 
 // ── State machine ────────────────────────────────────────────────────
@@ -439,37 +439,45 @@ function ParsedView({
     );
   }
 
-  // Full failure list.
+  // Full failure list — submission is blocked. The user's only path
+  // forward is to fix the .xlsx in their spreadsheet app and drop the
+  // file back into the dropzone. We deliberately drop:
+  //   - the "Submit anyway" button (no escape hatch for broken data)
+  //   - <SubmissionFeedback> (nothing to submit means nothing to feed back)
+  //   - <Downloads> (downloads of a failed report are misleading artifacts)
+  //   - <ParsedDetails> (showing the report extract beneath errors is
+  //                      mixed messaging — "look at all this data, but
+  //                      also it's broken")
+  // The mismatch panel and FixesLog still render — those are soft warnings
+  // / informational and the user needs to see them either way.
   return wrap(
     <>
       <FileStrip filename={state.filename} report={report} onReset={onReset} />
       <FixesLog fixes={sessionFixes} />
       {mismatch ? <MismatchPanel message={mismatch} /> : null}
 
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-text text-sm font-medium">Validation summary</p>
-              <p className="text-text-muted mt-1 text-xs">
-                {grade.notValidated.length} of {grade.total} checks failed
-                {grade.missing.length ? ` · ${grade.missing.length} missing` : ""}
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => void onSubmit()}
-              disabled={submission.kind === "submitting"}
-            >
-              <Send className="size-4" aria-hidden />
-              {submission.kind === "submitting" ? "Submitting…" : "Submit anyway"}
-            </Button>
+      <Card className="border-bad/40 bg-bad-bg">
+        <CardContent className="flex items-start gap-3 p-5">
+          <AlertTriangle className="text-bad mt-0.5 size-5 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-text text-sm font-semibold">
+              Fix and re-upload to continue
+            </p>
+            <p className="text-text-muted mt-1 text-sm leading-relaxed">
+              {grade.notValidated.length} of {grade.total}{" "}
+              {grade.notValidated.length === 1 ? "check" : "checks"} failed
+              {grade.missing.length
+                ? ` · ${grade.missing.length} missing ${
+                    grade.missing.length === 1 ? "entry" : "entries"
+                  }`
+                : ""}
+              . Open the .xlsx in your spreadsheet app, correct the highlighted
+              {failures.length === 1 ? " issue" : " issues"} below, then drop
+              the updated file back here.
+            </p>
           </div>
         </CardContent>
       </Card>
-
-      <SubmissionFeedback submission={submission} onAmend={(note) => void onSubmit(note)} />
 
       {failures.length > 0 ? (
         <div className="flex flex-col gap-3">
@@ -499,9 +507,6 @@ function ParsedView({
           </CardContent>
         </Card>
       ) : null}
-
-      <Downloads onDownloadJSON={onDownloadJSON} onDownloadXLSX={onDownloadXLSX} />
-      <ParsedDetails report={report} />
     </>,
   );
 }

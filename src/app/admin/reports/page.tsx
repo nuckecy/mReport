@@ -65,7 +65,7 @@ export default async function ReportsPage({
         <CardContent className="p-0">
           <table className="w-full text-sm">
             <thead className="bg-panel-2 text-text-muted">
-              <tr className="text-left text-xs tracking-wide uppercase">
+              <tr className="text-left text-xs">
                 <th className="px-4 py-2 font-medium">Month</th>
                 <th className="px-4 py-2 font-medium">Parish</th>
                 <th className="px-4 py-2 font-medium">Region</th>

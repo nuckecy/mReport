@@ -182,13 +182,14 @@ nonce-based once we move beyond dev parity. `unsafe-inline` on
 
 ## 10. Testing posture
 
-- **Unit tests**: 110 across 12 files. Covers parser §11.1 – §11.16
+- **Unit tests**: 134 across 15 files. Covers parser §11.1 – §11.16
   bug regressions, validation classifier, filter parsing, member
-  schemas, export builders, autofix patcher.
-- **Playwright E2E**: 4 tests covering the unauthenticated paths
-  (landing renders + login form + login validation + callback error
-  surfacing). Full submit-flow E2E is deferred — requires a Supabase
-  test account and Storage mock.
+  schemas, export builders, autofix patcher, and region rollup totals.
+- **Playwright E2E**: 9 tests covering the unauthenticated paths:
+  landing renders, login form + validation + callback-error surfacing,
+  and protected-route redirects for `/upload` and `/admin/*`. Full
+  submit-flow E2E is deferred (requires a Supabase test account and
+  Storage mock).
 - **CI**: `pnpm format:check && pnpm lint && pnpm typecheck && pnpm
   test && pnpm build` on every push to main (`.github/workflows/`).
 

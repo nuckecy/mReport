@@ -130,14 +130,14 @@ describe("formatterForCheck — section-aware classifier (§11.11)", () => {
     expect(formatterForCheck(c)(140)).toBe("140");
   });
 
-  it("Parish Records money keeps 2 decimals", () => {
+  it("Parish Records money formats as EUR with 2 decimals", () => {
     const c: Check = {
       section: "Parish Records",
       label: "Total Offering",
       calc: 1070,
       actual: 1070,
     };
-    expect(formatterForCheck(c)(1070)).toBe("1,070.00");
+    expect(formatterForCheck(c)(1070)).toBe("€1,070.00");
   });
 });
 

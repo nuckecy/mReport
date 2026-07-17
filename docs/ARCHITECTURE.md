@@ -293,6 +293,56 @@ isolation risk (key was read in this session) and chose not to rotate.
 
 ---
 
+## 15. Visual theme: Stripe-inspired light/dark (supersedes Cal.com dark-first)
+
+**Decision (2026-06-06, Slice 1.5):** The design-token layer in
+`src/app/globals.css` was re-themed from the original Cal.com-inspired,
+dark-first OKLCH palette to a Stripe-inspired system: white surfaces with
+navy ink (`#0A2540`) and an indigo accent (`#635BFF`) in light mode, and a
+cool blue-tinted dark mode. Light is now the default. Theme is selected by a
+`data-mode` attribute on `<html>` (was `data-theme`), and users can switch
+via a 3-state toggle (light → dark → system).
+
+**Why:** A visual-direction change requested during Slice 1.5. The rebrand is
+**presentation-only**: it touches token *values* and the mode-selection
+mechanism, not component structure, data flow, or behavior. Component code
+consumes token names, not raw colors, so the swap is contained to one file
+plus the toggle and the layout's init script. This is exactly the
+"edit the values in this file" escape hatch the original token design
+anticipated; we took it.
+
+**Why a `data-mode` attribute + inline init script (not CSS-only
+`prefers-color-scheme`):** Users wanted an explicit override (some prefer
+light even on a dark OS, and vice-versa). A stored preference has to win over
+the OS, which means reading `localStorage` before first paint, otherwise
+dark-preferring users get a flash of light. The inline script in `<head>`
+sets `data-mode` synchronously before React hydrates; `<html>` carries
+`suppressHydrationWarning` because the attribute is written by the script,
+not the server. Absence of a stored value means "system," resolved live via
+`matchMedia`.
+
+**Consequence:**
+- `globals.css` defines tokens under `[data-mode="light"]` (also `:root`,
+  the default) and `[data-mode="dark"]`. Both modes define the **same token
+  names** (only values differ), so downstream component code is
+  theme-agnostic, unchanged from before.
+- The mode attribute renamed from `data-theme` to `data-mode`. Any future
+  code or docs referencing `data-theme` is stale.
+- `src/components/theme/ThemeToggle.tsx` is the only runtime writer of
+  `data-mode` after first paint. It uses `useSyncExternalStore` over
+  `localStorage` (key `mreport-theme`), syncs across tabs via the `storage`
+  event, and follows OS changes live while in "system."
+- **CSP coupling:** the inline init script depends on the CSP allowing
+  `'unsafe-inline'` for `script-src` (already the case). The deferred Slice 2
+  move to a nonce-based CSP must give this script a nonce, or the theme will
+  flash on first paint.
+- Supersedes the Day-0 stack note ("Cal.com tokens") and the dark-first
+  assumption baked into earlier sections. Those described the prior palette;
+  this section is the current source of truth for the visual layer.
+- **Status: in the working tree, not yet committed** as of 2026-06-06.
+
+---
+
 ## Decisions still to make (not yet locked in)
 
 These are listed in `PROGRESS.md` under "Open questions" and "Blockers."

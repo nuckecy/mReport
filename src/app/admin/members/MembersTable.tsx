@@ -111,7 +111,7 @@ export function MembersTable({ currentUserId, members, scopeOptions }: MembersTa
         <CardContent className="p-0">
           <table className="w-full text-sm">
             <thead className="bg-panel-2 text-text-muted">
-              <tr className="text-left text-xs tracking-wide uppercase">
+              <tr className="text-left text-xs">
                 <th className="px-4 py-2 font-medium">Member</th>
                 <th className="px-4 py-2 font-medium">Role</th>
                 <th className="px-4 py-2 font-medium">Scope</th>
